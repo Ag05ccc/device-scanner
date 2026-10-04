@@ -4,7 +4,7 @@ export const isNumber = (value) =>
   typeof value === "number" && Number.isFinite(value);
 const text = (value) =>
   typeof value === "string" && value.length ? value : null;
-const compare = new Intl.Collator(undefined, {
+const compare = new Intl.Collator("tr", {
   numeric: true,
   sensitivity: "base",
 }).compare;
@@ -18,7 +18,7 @@ export function bandOf(frequency) {
 }
 
 export function signalText(value) {
-  return isNumber(value) ? `${value} dBm` : "Unknown";
+  return isNumber(value) ? `${value} dBm` : "Bilinmiyor";
 }
 
 export function signalPercent(value) {
@@ -35,6 +35,17 @@ export function observations(nodes, radio, nodeId = "all") {
   for (const node of nodes) {
     if (nodeId !== "all" && node.node_id !== nodeId) continue;
     const scan = node.radios[radio];
+    // A later error report does not make retained successful readings newer.
+    const hasSuccessTime = Object.hasOwn(scan, "last_success_at");
+    const receivedAt = hasSuccessTime ? scan.last_success_at : scan.received_at;
+    const state = !node.online
+      ? "offline"
+      : scan.status === "error"
+        ? "error"
+        : scan.freshness === "fresh"
+          ? "latest"
+          : scan.freshness ||
+            (scan.status === "success" ? "latest" : "waiting");
     for (const record of scan.observations) {
       const wifi = radio === "wifi";
       rows.push({
@@ -49,21 +60,19 @@ export function observations(nodes, radio, nodeId = "all") {
         record,
         name: wifi
           ? record.SSID === ""
-            ? "Hidden network"
+            ? "Gizli ağ"
             : record.SSID
-          : text(record.SSID) || "Unnamed device",
+          : text(record.SSID) || "Adsız cihaz",
         address: record.MAC,
         signal: isNumber(record.RSSI) ? record.RSSI : null,
         channel: isNumber(record.Channel) ? record.Channel : null,
         band: wifi ? bandOf(record.Frequency) : "unknown",
-        security: text(record.AuthMode) || "Unknown",
-        receivedAt: scan.received_at,
-        observedAt: scan.observed_at,
-        state: !node.online
-          ? "offline"
-          : scan.status === "error"
-            ? "error"
-            : "latest",
+        security: text(record.AuthMode) || "Bilinmiyor",
+        receivedAt,
+        lastReportAt: scan.received_at,
+        observedAt:
+          hasSuccessTime && scan.status !== "success" ? null : scan.observed_at,
+        state,
         error: scan.error,
       });
     }
@@ -109,11 +118,7 @@ export function channelCounts(rows) {
         band: row.band,
         addresses: new Set(),
       });
-    channels
-      .get(key)
-      .addresses.add(
-        row.address === "Unknown" ? row.id : row.address.toUpperCase(),
-      );
+    channels.get(key).addresses.add(row.address.toUpperCase());
   }
   return [...channels.values()]
     .sort((a, b) => compare(a.band, b.band) || a.channel - b.channel)

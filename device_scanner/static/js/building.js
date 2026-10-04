@@ -1,12 +1,19 @@
 import { $, element, icon, setText } from "./ui.js";
 import { FLOORS, floorFor, floorLabel } from "./placement.js";
+import { radioState } from "./nodes.js";
 
 function statusFor(node, connected) {
   if (!connected) return { key: "unknown", label: "Bağlantı yok" };
   if (!node.online) return { key: "offline", label: "Çevrimdışı" };
-  if (Object.values(node.radios).some((scan) => scan.status === "error"))
-    return { key: "error", label: "Radyo hatası" };
-  return { key: "online", label: "Çevrimiçi" };
+  const active = Object.values(node.radios).filter(
+    (scan) => scan.enabled !== false,
+  );
+  if (active.some((scan) => scan.freshness === "error"))
+    return { key: "error", label: "Tarama hatası" };
+  if (!active.length) return { key: "unknown", label: "Radyolar kapalı" };
+  if (active.some((scan) => scan.freshness !== "fresh"))
+    return { key: "unknown", label: "Gözlem eksik" };
+  return { key: "online", label: "Gözlemler güncel" };
 }
 
 function createNode(nodeId) {
@@ -54,9 +61,13 @@ export function renderBuilding(nodes, view, connected, placements) {
     );
     setText(button.querySelector(".building-node-state span"), state.label);
     const prefix = state.key === "online" ? "" : "Son kayıt: ";
+    const count = (radio) =>
+      node.radios[radio].last_success_at
+        ? node.radios[radio].observations.length
+        : "—";
     setText(
       button.querySelector(".building-node-counts"),
-      `${prefix}Wi-Fi ${node.radios.wifi.observations.length} · BT ${node.radios.bluetooth.observations.length}`,
+      `${prefix}Wi-Fi ${count("wifi")} · BT ${count("bluetooth")}`,
     );
     if (floor === null) unplaced++;
     else counts.set(floor, counts.get(floor) + 1);
@@ -99,13 +110,10 @@ export function renderBuilding(nodes, view, connected, placements) {
   ]) {
     const scan = selected.radios[radio];
     const message =
-      scan.status === "waiting"
-        ? "Tarama bekleniyor"
-        : scan.status === "error"
-          ? "Tarama hatası"
-          : !connected || !selected.online
-            ? `${scan.observations.length} önceki kayıt`
-            : `${scan.observations.length} gözlem`;
+      radioState(selected, radio, connected) +
+      (scan.freshness === "fresh" && connected && selected.online
+        ? ` · ${scan.observations.length} gözlem`
+        : "");
     setText($("placement-" + radio), `${label} · ${message}`);
   }
 }

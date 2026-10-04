@@ -3,6 +3,7 @@
 import argparse
 import logging
 import math
+from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
@@ -69,6 +70,9 @@ def main(argv=None):
     server_parser.add_argument("--host", default="127.0.0.1")
     server_parser.add_argument("--port", type=port_number, default=8001)
     server_parser.add_argument("--offline-after", type=positive_number, default=60.0, metavar="SECONDS")
+    server_parser.add_argument("--placements-file", type=Path,
+                               default=Path(".device-scanner/placements.json"), metavar="PATH",
+                               help="paylaşılan kat yerleşimlerinin kayıt dosyası")
 
     node_parser = commands.add_parser("node", help="bağımsız tarayıcı node")
     node_parser.add_argument("--id", dest="node_id", required=True, type=node_identifier)
@@ -84,6 +88,9 @@ def main(argv=None):
     dev_parser.add_argument("--nodes", type=positive_integer, default=3)
     dev_parser.add_argument("--port", type=port_number, default=8001)
     dev_parser.add_argument("--interval", type=positive_number, default=2.0, metavar="SECONDS")
+    dev_parser.add_argument("--placements-file", type=Path,
+                            default=Path(".device-scanner/placements.json"), metavar="PATH",
+                            help="paylaşılan kat yerleşimlerinin kayıt dosyası")
 
     args = vars(parser.parse_args(argv))
     command = args.pop("command")

@@ -30,7 +30,7 @@ export function startPolling(onSnapshot, onConnection) {
       ) {
         throw new Error("Invalid scanner response");
       }
-      onSnapshot(data.nodes);
+      onSnapshot(data);
       onConnection(true);
     } catch {
       if (!stopped) onConnection(false);
@@ -55,4 +55,16 @@ export function startPolling(onSnapshot, onConnection) {
       document.removeEventListener("visibilitychange", onVisibility);
     },
   };
+}
+
+// Placement is shared workspace metadata, stored atomically by the server.
+export async function savePlacement(nodeId, floor) {
+  const response = await fetch("/api/placements", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ node_id: nodeId, floor }),
+    signal: AbortSignal.timeout(4000),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }

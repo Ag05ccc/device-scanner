@@ -14,15 +14,21 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
         first = await dummy.scan(0.001, node_id="pi-1", radio="bluetooth")
         again = await dummy.scan(0.001, node_id="pi-1", radio="bluetooth")
         second = await dummy.scan(0.001, node_id="pi-2", radio="bluetooth")
+        self.assertEqual(len(first), 12)
+        self.assertEqual(len(again), 12)
+        self.assertEqual({record["MAC"] for record in first},
+                         {record["MAC"] for record in again})
         stable_fields = set(COLUMNS) - {"RSSI", "AccuracyMeters"}
         self.assertEqual({key: first[0][key] for key in stable_fields},
                          {key: again[0][key] for key in stable_fields})
         self.assertNotEqual(first[0]["MAC"], second[0]["MAC"])
         wifi = await dummy.scan(0.001, node_id="pi-1", radio="wifi")
+        self.assertEqual(len(wifi), 8)
         for radio, records in (("wifi", wifi), ("bluetooth", first)):
-            self.assertEqual(tuple(records[0]), COLUMNS)
-            validate_record(records[0], radio)
-            self.assertLess(records[0]["RSSI"], 0)
+            for record in records:
+                self.assertEqual(tuple(record), COLUMNS)
+                validate_record(record, radio)
+                self.assertLess(record["RSSI"], 0)
         self.assertEqual(first[0]["Channel"], 0)
         self.assertEqual(first[0]["Type"], "BLE")
         self.assertEqual(wifi[0]["Type"], "WIFI")

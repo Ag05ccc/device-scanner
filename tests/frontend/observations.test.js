@@ -7,6 +7,7 @@ import {
   channelCounts,
   recordHistory,
   bandOf,
+  signalText,
 } from "../../device_scanner/static/js/observations.js";
 import {
   exportDocument,
@@ -57,10 +58,10 @@ test("radio and Pi scopes preserve independent observations and unknown values",
   ];
   const rows = observations(nodes, "wifi");
   assert.equal(rows.length, 2);
-  assert.equal(rows[0].name, "Hidden network");
+  assert.equal(rows[0].name, "Gizli ağ");
   assert.equal(rows[0].signal, 0);
   assert.equal(rows[1].signal, null);
-  assert.equal(rows[1].name, "Hidden network");
+  assert.equal(rows[1].name, "Gizli ağ");
   assert.notEqual(rows[0].id, rows[1].id);
   assert.equal(observations(nodes, "wifi", "pi-02").length, 1);
   assert.equal(observations(nodes, "bluetooth")[0].signal, -68);
@@ -140,6 +141,63 @@ test("history adds one point per new report, keeps gaps, bounds memory", () => {
   assert.equal(history.get(key).samples.at(-1).value, null);
   recordHistory(history, [], 1000000);
   assert.equal(history.size, 0);
+});
+
+test("radio freshness excludes stale readings even while the Pi remains online", () => {
+  const nodes = ["fresh", "stale", "waiting", "disabled"].map(
+    (freshness, index) => {
+      const source = node(`pi-${index}`, {
+        Channel: 6,
+        Frequency: 2437,
+        RSSI: -50,
+      });
+      source.radios.wifi.freshness = freshness;
+      source.radios.wifi.last_success_at = "2026-10-04T09:59:00Z";
+      return source;
+    },
+  );
+  const rows = observations(nodes, "wifi");
+  assert.deepEqual(
+    rows.map((row) => row.state),
+    ["latest", "stale", "waiting", "disabled"],
+  );
+  assert.deepEqual(channelCounts(rows), [
+    { channel: 6, band: "2.4", count: 1 },
+  ]);
+  nodes[0].online = false;
+  nodes[1].radios.wifi.status = "error";
+  assert.deepEqual(
+    observations(nodes, "wifi").map((row) => row.state),
+    ["offline", "error", "waiting", "disabled"],
+  );
+  const history = new Map();
+  recordHistory(history, [rows[0]], 1000);
+  recordHistory(history, [{ ...rows[0], state: "stale" }], 2000);
+  recordHistory(history, [{ ...rows[0], state: "stale" }], 3000);
+  assert.deepEqual(
+    history.get(rows[0].id).samples.map((sample) => sample.value),
+    [-50, null],
+  );
+});
+
+test("failed radio reports do not redate their retained successful observations", () => {
+  const source = node("pi-01", { RSSI: -55 }, { status: "error" });
+  source.radios.wifi.last_success_at = "2026-10-04T09:58:00Z";
+  source.radios.wifi.freshness = "error";
+  const row = observations([source], "wifi")[0];
+  assert.equal(row.receivedAt, "2026-10-04T09:58:00Z");
+  assert.equal(row.lastReportAt, "2026-10-04T10:00:00Z");
+  assert.equal(row.observedAt, null);
+  assert.equal(row.state, "error");
+  assert.equal(row.signal, -55);
+  // Explicitly missing success metadata must not fall back to the failed report.
+  source.radios.wifi.last_success_at = null;
+  assert.equal(observations([source], "wifi")[0].receivedAt, null);
+  // Older server fixtures remain usable without pretending an error is current.
+  delete source.radios.wifi.last_success_at;
+  const legacy = observations([source], "wifi")[0];
+  assert.equal(legacy.receivedAt, source.radios.wifi.received_at);
+  assert.equal(legacy.state, "error");
 });
 
 test("exports preserve displayed order, original WiGLE records, errors and filter context", () => {
@@ -238,6 +296,8 @@ test("Bluetooth type codes never become Wi-Fi bands; blank RSSI stays unknown", 
   const wifi = observations([node("pi-01", { RSSI: "" })], "wifi")[0];
   assert.equal(wifi.signal, null);
   assert.equal(wifi.channel, null);
+  assert.equal(signalText(wifi.signal), "Bilinmiyor");
+  assert.equal(signalText(0), "0 dBm");
   const same = observations(
     [node("pi-01", { MAC: "aa:bb:cc:dd:ee:ff" })],
     "wifi",

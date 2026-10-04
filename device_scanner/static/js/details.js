@@ -1,4 +1,12 @@
-import { $, element, icon, ageText, valueText, setText } from "./ui.js";
+import {
+  $,
+  element,
+  icon,
+  ageText,
+  valueText,
+  setText,
+  observationStateText,
+} from "./ui.js";
 import { signalText } from "./observations.js";
 
 export function renderDetails(row, connected) {
@@ -21,7 +29,7 @@ export function renderDetails(row, connected) {
       element("span", "state-badge"),
     );
     const raw = element("details", "raw-details");
-    raw.append(element("summary", "", "WiGLE record"), element("pre"));
+    raw.append(element("summary", "", "Ham WiGLE kaydı"), element("pre"));
     container.replaceChildren(
       identity,
       element("dl", "detail-fields"),
@@ -31,10 +39,10 @@ export function renderDetails(row, connected) {
   }
   const previous = row.state !== "latest" || !connected;
   const state = !connected
-    ? "Outdated · server disconnected"
+    ? "Önceki gözlem · sunucuya ulaşılamıyor"
     : row.state === "latest"
-      ? "Latest scan result"
-      : `Previous result · ${row.state}`;
+      ? "Güncel tarama sonucu"
+      : `Önceki gözlem · ${observationStateText(row.state)}`;
   setText(container.querySelector("h3"), row.name);
   setText(container.querySelector(".detail-address"), row.address);
   setText(container.querySelector(".state-badge"), state);
@@ -44,44 +52,43 @@ export function renderDetails(row, connected) {
   const fields = container.querySelector(".detail-fields");
   const props = row.record;
   const entries = [
-    ["Scanner", row.nodeId],
-    ["Source", row.scanner === "dummy" ? "Dummy data" : "Real hardware"],
-    ["Signal", signalText(row.signal)],
+    ["Sensör", row.nodeId],
+    ["Kaynak", row.scanner === "dummy" ? "Demo verisi" : "Gerçek donanım"],
+    ["Sinyal", signalText(row.signal)],
   ];
+  const optional = (label, value) => {
+    if (value !== "" && value !== null && value !== undefined)
+      entries.push([label, valueText(value)]);
+  };
   if (row.radio === "wifi") {
-    entries.push(
-      ["Channel", row.channel ?? "Unknown"],
-      ["Band", row.band === "unknown" ? "Unknown" : `${row.band} GHz`],
-      ["Frequency (MHz)", valueText(props.Frequency)],
-      ["Security", row.security],
-      ["Roaming consortium IDs", valueText(props.RCOIs)],
-    );
+    optional("Kanal", row.channel);
+    optional("Bant", row.band === "unknown" ? null : `${row.band} GHz`);
+    optional("Frekans (MHz)", props.Frequency);
+    entries.push(["Güvenlik", row.security]);
+    optional("Dolaşım konsorsiyumu kimlikleri", props.RCOIs);
   } else {
     entries.push(
-      ["Type", props.Type],
-      ["Capabilities", props.AuthMode || "Unknown"],
-      [
-        "Device type code",
-        valueText(props.Frequency === "" ? null : props.Frequency),
-      ],
-      ["Manufacturer ID", valueText(props.MfgrId === "" ? null : props.MfgrId)],
+      ["Tür", props.Type],
+      ["Özellikler", props.AuthMode || "Bilinmiyor"],
     );
+    optional("Cihaz sınıfı kodu", props.Frequency);
+    optional("Üretici kimliği", props.MfgrId);
   }
-  entries.push(
-    ["First seen (UTC)", valueText(props.FirstSeen)],
-    [
-      row.scanner === "dummy" ? "Sample latitude" : "Latitude",
-      valueText(props.CurrentLatitude),
-    ],
-    [
-      row.scanner === "dummy" ? "Sample longitude" : "Longitude",
-      valueText(props.CurrentLongitude),
-    ],
-    ["Altitude (m)", valueText(props.AltitudeMeters)],
-    ["Accuracy (m)", valueText(props.AccuracyMeters)],
+  entries.push(["İlk görülme (UTC)", valueText(props.FirstSeen)]);
+  optional(
+    row.scanner === "dummy" ? "Örnek enlem" : "Enlem",
+    props.CurrentLatitude,
   );
+  optional(
+    row.scanner === "dummy" ? "Örnek boylam" : "Boylam",
+    props.CurrentLongitude,
+  );
+  optional("Yükseklik (m)", props.AltitudeMeters);
+  optional("Konum doğruluğu (m)", props.AccuracyMeters);
   // An error report's timestamp does not date its retained successful observations.
-  entries.push(["Last radio report", ageText(row.receivedAt)]);
+  entries.push(["Son başarılı tarama", ageText(row.receivedAt)]);
+  if (row.lastReportAt && row.lastReportAt !== row.receivedAt)
+    entries.push(["Son radyo raporu", ageText(row.lastReportAt)]);
   entries.forEach(([label, value], index) => {
     let pair = fields.children[index];
     if (!pair) {

@@ -63,9 +63,16 @@ async def pause(stop_event, interval):
         pass
 
 
-async def heartbeat_loop(*, node_id, server_url, scanner, interval, stop_event):
+async def heartbeat_loop(*, node_id, server_url, scanner, interval, stop_event,
+                         enabled_radios=None, expected_cycle_seconds=None):
+    metadata = {}
+    if enabled_radios is not None:
+        metadata["enabled_radios"] = list(enabled_radios)
+    if expected_cycle_seconds is not None:
+        metadata["expected_cycle_seconds"] = expected_cycle_seconds
     while not stop_event.is_set():
-        await send_report(server_url, {"node_id": node_id, "scanner": scanner, "kind": "heartbeat"})
+        await send_report(server_url, {"node_id": node_id, "scanner": scanner,
+                                       "kind": "heartbeat", **metadata})
         await pause(stop_event, interval)
 
 
@@ -111,7 +118,10 @@ async def run_node(*, node_id, server_url, scanner, interval, timeout, radios,
         return
     common = dict(node_id=node_id, server_url=server_url, scanner=scanner,
                   interval=interval, stop_event=stop_event)
-    tasks = [asyncio.create_task(heartbeat_loop(**common), name="heartbeat")]
+    tasks = [asyncio.create_task(heartbeat_loop(
+        **common, enabled_radios=radios,
+        expected_cycle_seconds={radio: interval + timeout for radio in radios},
+    ), name="heartbeat")]
     tasks.extend(asyncio.create_task(radio_loop(
         **common, radio=radio, timeout=timeout,
         bluetooth_adapter=bluetooth_adapter, wifi_interface=wifi_interface,

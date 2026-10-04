@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>Device Scanner · Wireless overview</title>
+    <title>Device Scanner · Kablosuz ortam</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/static/styles.css" />
     <script type="module" src="/static/js/app.js"></script>
@@ -61,479 +61,656 @@
         <path d="M5 12h14m-5-5 5 5-5 5" />
       </symbol>
     </svg>
-    <a class="skip-link" href="#main">Skip to results</a>
-    <div class="shell">
-      <aside class="sidebar" aria-label="Scanner nodes">
-        <a class="brand" href="/" aria-label="Device Scanner home"
-          ><span class="brand-mark"
-            ><svg class="icon"><use href="#i-wifi" /></svg></span
-          ><span>Device Scanner<small>WIRELESS MONITOR</small></span></a
-        >
-        <div class="sidebar-label">
-          WORKSPACE <span class="live-dot"></span>
-        </div>
-        <button
-          id="all-nodes"
-          class="scope-button active"
-          type="button"
-          aria-pressed="true"
-        >
-          <svg class="icon"><use href="#i-grid" /></svg><span>All scanners</span
-          ><span id="sidebar-count" class="pill">0</span>
+    <a class="skip-link" href="#main">İçeriğe geç</a>
+    <header class="app-header">
+      <a class="app-brand" href="/" aria-label="Device Scanner ana sayfa"
+        ><span class="brand-symbol"
+          ><svg class="icon"><use href="#i-wifi" /></svg></span
+        >Device Scanner</a
+      >
+      <nav class="workspace-tabs" aria-label="Ana gezinti">
+        <button type="button" data-tab="overview" aria-current="page">
+          Genel bakış
         </button>
-        <div class="sidebar-label node-label">
-          RASPBERRY PI NODES <span id="node-count">0</span>
+        <button type="button" data-tab="devices">Cihazlar</button>
+        <button type="button" data-tab="sensors">Sensörler</button>
+        <button type="button" data-tab="analysis">Analiz</button>
+      </nav>
+      <div class="header-actions">
+        <span id="connection" class="connection"
+          ><span class="status-dot"></span
+          ><span id="connection-text">Bağlanıyor</span></span
+        ><button
+          id="refresh"
+          class="icon-button"
+          type="button"
+          aria-label="Yenile"
+          title="Yenile"
+        >
+          <svg class="icon"><use href="#i-refresh" /></svg></button
+        ><button
+          id="theme"
+          class="icon-button"
+          type="button"
+          aria-label="Temayı değiştir"
+        >
+          <svg class="icon"><use href="#i-theme" /></svg>
+        </button>
+      </div>
+    </header>
+    <main id="main" class="workspace" tabindex="-1">
+      <div class="workspace-heading">
+        <div>
+          <h1 id="page-title">Binanın kablosuz ortamı</h1>
+          <p id="page-description">
+            Görülen cihazlar, katlar ve gözlem durumu.
+          </p>
         </div>
-        <nav id="nodes" class="node-list" aria-label="Choose a Pi">
-          <p class="sidebar-empty">Waiting for your first Pi…</p>
-        </nav>
-        <div class="sidebar-bottom">
-          <span class="sidebar-status"
-            ><span class="live-dot"></span>Independent scanners</span
+        <span id="last-observation" class="subtle"></span>
+      </div>
+      <p id="demo-banner" class="demo-banner" hidden></p>
+      <p id="connection-banner" class="notice" role="alert" hidden></p>
+      <p
+        id="status-announcement"
+        class="sr-only"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <section id="overview-summary" aria-label="Bina geneli özeti">
+        <div id="environment-status" class="environment-status">
+          <span class="status-dot"></span>
+          <p id="environment-message">İlk gözlem bekleniyor.</p>
+          <button id="inspect-health" class="text-button" type="button">
+            Sensör durumu
+          </button>
+        </div>
+        <div class="environment-metrics">
+          <button
+            class="environment-metric wifi"
+            type="button"
+            data-metric="wifi"
           >
-          <p>One view of the wireless world<br />around your Raspberry Pis.</p>
-          <span class="version">LOCAL WORKSPACE <span>v1.0</span></span>
-        </div>
-      </aside>
-      <div class="main-shell">
-        <header class="topbar">
-          <div class="breadcrumb">
-            Workspace <span>/</span> <strong>Overview</strong>
+            <span
+              >Wi-Fi erişim noktası<svg class="icon">
+                <use href="#i-wifi" /></svg></span
+            ><strong id="summary-wifi">—</strong
+            ><small id="summary-wifi-note">Gözlem bekleniyor</small>
+          </button>
+          <button
+            class="environment-metric bluetooth"
+            type="button"
+            data-metric="bluetooth"
+          >
+            <span
+              >Bluetooth cihazı<svg class="icon">
+                <use href="#i-bluetooth" /></svg></span
+            ><strong id="summary-bluetooth">—</strong
+            ><small id="summary-bluetooth-note">Gözlem bekleniyor</small>
+          </button>
+          <button
+            class="environment-metric discoveries"
+            type="button"
+            data-metric="new"
+          >
+            <span
+              >Yeni görülen <span class="metric-period">Son 10 dk</span></span
+            ><strong id="summary-new">—</strong
+            ><small>İlk taramadaki cihazlar başlangıç kabul edilir</small>
+          </button>
+          <div class="coverage-card">
+            <span id="coverage-state">Gözlem bekleniyor</span
+            ><strong id="coverage-value">—</strong
+            ><small id="coverage-note">Bina geneli · etkin radyolar</small>
           </div>
-          <div class="topbar-actions">
-            <span id="connection" class="connection" role="status"
-              ><span class="status-dot"></span
-              ><span id="connection-text">Connecting</span></span
-            ><span class="topbar-divider"></span
-            ><button
-              id="theme"
-              class="icon-button"
-              type="button"
-              aria-label="Switch to dark theme"
-              title="Switch to dark theme"
-            >
-              <svg class="icon"><use href="#i-theme" /></svg>
+        </div>
+      </section>
+      <section
+        id="view-observations"
+        class="observation-layout"
+        aria-label="Görülen cihazlar"
+      >
+        <aside
+          id="floor-overview"
+          class="panel floor-overview"
+          aria-label="Katlarda gözlenen cihazlar"
+        >
+          <div class="panel-heading"><h2>Katlarda gözlenenler</h2></div>
+          <div id="floor-summaries"></div>
+          <p class="floor-explanation">
+            Bir cihaz birden fazla katta görülebilir. Kat sayıları toplanmaz;
+            kesin konum gösterilmez.
+          </p>
+          <button type="button" id="reset-floor" class="text-button">
+            Tüm katları göster
+          </button>
+        </aside>
+        <div class="panel devices-panel">
+          <div class="device-heading">
+            <h2>
+              Görülen cihazlar
+              <span id="device-count" class="count-badge">0</span>
+            </h2>
+            <span id="device-scope" class="subtle">Tüm katlar · tüm türler</span
+            ><button id="open-all-devices" type="button" class="text-button">
+              Tüm cihazlar →
             </button>
           </div>
-        </header>
-        <main id="main" tabindex="-1">
-          <div class="page-heading">
-            <div>
-              <div class="eyebrow">YOUR NETWORK, AT A GLANCE</div>
-              <h1>Wireless overview</h1>
-              <p>Discover what’s nearby. See what every Pi sees.</p>
-            </div>
-            <div class="heading-actions">
-              <button id="refresh" class="button" type="button">
-                <svg class="icon"><use href="#i-refresh" /></svg>Refresh
+          <div class="device-filters">
+            <label class="search-field"
+              ><svg class="icon"><use href="#i-search" /></svg
+              ><input
+                id="device-search"
+                type="search"
+                placeholder="Ad veya adres ara…"
+                aria-label="Cihazlarda ara"
+                autocomplete="off"
+              /><kbd aria-hidden="true">/</kbd></label
+            ><select id="device-radio" aria-label="Cihaz türü">
+              <option value="all">Tüm türler</option>
+              <option value="wifi">Wi-Fi</option>
+              <option value="bluetooth">Bluetooth</option></select
+            ><select id="device-floor" aria-label="Gözlenen kat">
+              <option value="all">Tüm katlar</option>
+              <option value="1">1. kat</option>
+              <option value="2">2. kat</option>
+              <option value="3">3. kat</option>
+              <option value="unassigned">Atanmamış</option></select
+            ><select id="device-status" aria-label="Gözlem durumu">
+              <option value="all">Tüm durumlar</option>
+              <option value="current">Görüldü</option>
+              <option value="recent">Az önce görüldü</option>
+              <option value="new">Yeni görülen</option>
+              <option value="missing">Artık görülmüyor</option>
+              <option value="unknown">Durum bilinmiyor</option></select
+            ><select id="device-sort" aria-label="Cihaz sıralaması">
+              <option value="name">Ad A–Z</option>
+              <option value="lastSeen">Son görülme</option>
+              <option value="signal">Sinyal</option>
+              <option value="floor">Kat</option>
+              <option value="state">Durum</option></select
+            ><button
+              id="device-sort-now"
+              class="icon-button"
+              type="button"
+              aria-label="Cihazları yeniden sırala"
+              title="Güncellemeler satır sırasını korur; yeniden sırala"
+            >
+              <svg class="icon"><use href="#i-refresh" /></svg>
+            </button>
+          </div>
+          <div class="device-table-scroll">
+            <table class="device-table">
+              <caption class="sr-only">
+                Her kablosuz adres tek satırdır. Ayrıntılar için cihaz adını
+                seçin.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">CİHAZ / AĞ</th>
+                  <th scope="col">TÜR</th>
+                  <th scope="col">GÖZLENEN KAT</th>
+                  <th scope="col">DURUM</th>
+                  <th scope="col">SİNYAL</th>
+                  <th scope="col">SON GÖRÜLME</th>
+                </tr>
+              </thead>
+              <tbody id="device-rows"></tbody>
+            </table>
+            <div id="devices-empty" class="empty-state">
+              <h3 id="devices-empty-title">İlk gözlem bekleniyor</h3>
+              <p id="devices-empty-description">
+                Sensörler veri gönderdiğinde cihazlar burada görünür.
+              </p>
+              <button
+                type="button"
+                id="device-clear-filters"
+                class="button"
+                hidden
+              >
+                Filtreleri temizle
               </button>
-              <details class="export-menu">
-                <summary class="button primary">
-                  <svg class="icon"><use href="#i-download" /></svg>Export
-                  <span aria-hidden="true">⌄</span>
-                </summary>
-                <div class="menu-panel">
-                  <button id="export-json" type="button" disabled>
-                    Download JSON</button
-                  ><button id="export-csv" type="button" disabled>
-                    Download CSV
-                  </button>
-                </div>
-              </details>
             </div>
           </div>
-          <p id="connection-banner" class="notice" role="alert" hidden></p>
+          <div class="table-footer">
+            <span id="device-list-note"></span
+            ><button type="button" id="device-more" class="text-button" hidden>
+              50 cihaz daha göster
+            </button>
+          </div>
+        </div>
+      </section>
+      <section id="view-sensors" hidden aria-label="Sensör yönetimi">
+        <section
+          id="building"
+          class="panel building-panel"
+          aria-labelledby="building-title"
+          lang="tr"
+        >
+          <div class="panel-heading">
+            <div>
+              <h2 id="building-title">Bina yerleşimi</h2>
+              <p>
+                Sensörlerin katlarını düzenleyin; bir katta birden fazla Pi
+                bulunabilir.
+              </p>
+            </div>
+            <span id="building-summary" class="building-summary"
+              >3 kat · 0 Pi</span
+            >
+          </div>
+          <div class="building-layout">
+            <div class="building-scene">
+              <div class="building-roof" aria-hidden="true">
+                <span></span>
+              </div>
+              <div class="building-floors">
+                <section
+                  id="building-floor-3"
+                  class="building-floor"
+                  aria-labelledby="floor-title-3"
+                >
+                  <div class="floor-label">
+                    <span class="floor-number" aria-hidden="true">03</span>
+                    <h3 id="floor-title-3">3. kat</h3>
+                    <span id="floor-count-3">0 Pi</span>
+                  </div>
+                  <div class="floor-space">
+                    <div id="floor-nodes-3" class="floor-nodes"></div>
+                    <p id="floor-empty-3" class="floor-empty">
+                      Bu katta henüz Pi yok
+                    </p>
+                  </div>
+                </section>
+                <section
+                  id="building-floor-2"
+                  class="building-floor"
+                  aria-labelledby="floor-title-2"
+                >
+                  <div class="floor-label">
+                    <span class="floor-number" aria-hidden="true">02</span>
+                    <h3 id="floor-title-2">2. kat</h3>
+                    <span id="floor-count-2">0 Pi</span>
+                  </div>
+                  <div class="floor-space">
+                    <div id="floor-nodes-2" class="floor-nodes"></div>
+                    <p id="floor-empty-2" class="floor-empty">
+                      Bu katta henüz Pi yok
+                    </p>
+                  </div>
+                </section>
+                <section
+                  id="building-floor-1"
+                  class="building-floor"
+                  aria-labelledby="floor-title-1"
+                >
+                  <div class="floor-label">
+                    <span class="floor-number" aria-hidden="true">01</span>
+                    <h3 id="floor-title-1">1. kat</h3>
+                    <span id="floor-count-1">0 Pi</span>
+                  </div>
+                  <div class="floor-space">
+                    <div id="floor-nodes-1" class="floor-nodes"></div>
+                    <p id="floor-empty-1" class="floor-empty">
+                      Bu katta henüz Pi yok
+                    </p>
+                  </div>
+                </section>
+              </div>
+              <div class="building-ground" aria-hidden="true">
+                <span>GİRİŞ</span>
+              </div>
+              <div class="building-legend">
+                <span><i class="status-dot"></i>Çevrimiçi</span>
+                <span><i class="status-dot offline-dot"></i>Çevrimdışı</span>
+                <span><i class="status-dot error-dot"></i>Radyo hatası</span>
+              </div>
+            </div>
+            <aside class="placement-panel" aria-label="Pi kat yerleşimi">
+              <div class="placement-heading">
+                <span class="panel-label">SEÇİLİ PI</span>
+                <button
+                  id="building-all"
+                  class="building-all active"
+                  type="button"
+                  aria-pressed="true"
+                >
+                  Tüm Pi'ler
+                </button>
+              </div>
+              <div id="placement-empty" class="placement-empty">
+                <span class="placement-symbol"
+                  ><svg class="icon" aria-hidden="true">
+                    <use href="#i-node" /></svg
+                ></span>
+                <h3>Bir Pi seçin</h3>
+                <p>
+                  Binadaki bir sensörü seçerek durumunu görün ve bulunduğu katı
+                  seçin.
+                </p>
+              </div>
+              <div id="placement-selection" hidden>
+                <span id="placement-state" class="placement-state"></span>
+                <h3 id="placement-node-name"></h3>
+                <p id="placement-location" class="placement-location"></p>
+                <label class="placement-field" for="placement-floor"
+                  >Bulunduğu kat</label
+                >
+                <select id="placement-floor">
+                  <option value="1">1. kat</option>
+                  <option value="2">2. kat</option>
+                  <option value="3">3. kat</option>
+                  <option value="unplaced">Yerleştirilmemiş</option>
+                </select>
+                <button id="sensor-analysis" class="button" type="button">
+                  Gözlemleri analiz et
+                </button>
+                <div class="placement-radios">
+                  <p>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-wifi" /></svg
+                    ><span id="placement-wifi"></span>
+                  </p>
+                  <p>
+                    <svg class="icon" aria-hidden="true">
+                      <use href="#i-bluetooth" /></svg
+                    ><span id="placement-bluetooth"></span>
+                  </p>
+                </div>
+              </div>
+              <div class="placement-help">
+                <p>Bir katta birden fazla Pi olabilir.</p>
+                <p id="placement-note" role="status">
+                  Kat seçimleri sunucuda saklanır ve tüm kullanıcılar için
+                  geçerlidir.
+                </p>
+              </div>
+            </aside>
+          </div>
+          <div id="building-unplaced" class="building-unplaced" hidden>
+            <div class="unplaced-heading">
+              <h3>
+                Yerleştirilmemiş Pi'ler
+                <span id="unplaced-count" class="count-badge">0</span>
+              </h3>
+              <p>Bir cihaz seçip katını belirleyin.</p>
+            </div>
+            <div id="unplaced-nodes" class="floor-nodes"></div>
+          </div>
+        </section>
+        <section class="panel sensor-panel" aria-label="Tarama durumu">
+          <div class="panel-heading">
+            <h2>Tarama durumu</h2>
+            <span class="subtle"
+              >Sunucu bağlantısı ve radyo güncelliği ayrı izlenir</span
+            >
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>SENSÖR</th>
+                  <th>KAT</th>
+                  <th>BAĞLANTI</th>
+                  <th>WI-FI · SON BAŞARILI TARAMA</th>
+                  <th>BLUETOOTH · SON BAŞARILI TARAMA</th>
+                </tr>
+              </thead>
+              <tbody id="nodes"></tbody>
+            </table>
+            <p id="sensors-empty" class="empty-state">Henüz sensör yok.</p>
+          </div>
+        </section>
+      </section>
+      <section id="view-analysis" hidden aria-label="Gözlem analizi">
+        <div class="analysis-actions">
+          <label
+            >Sensör
+            <select id="analysis-node">
+              <option value="all">Tüm sensörler</option>
+            </select></label
+          >
+          <details class="export-menu">
+            <summary class="button">
+              <svg class="icon"><use href="#i-download" /></svg>Dışa aktar
+            </summary>
+            <div class="menu-panel">
+              <button id="export-json" type="button" disabled>
+                JSON kaydet</button
+              ><button id="export-csv" type="button" disabled>
+                WiGLE CSV kaydet
+              </button>
+            </div>
+          </details>
+        </div>
+        <div class="analyzer-bar">
+          <div class="radio-tabs" role="group" aria-label="Radyo türü">
+            <button
+              id="radio-wifi"
+              type="button"
+              class="radio-tab active"
+              aria-pressed="true"
+            >
+              <svg class="icon"><use href="#i-wifi" /></svg>Wi-Fi<span
+                id="wifi-count"
+                class="tab-count"
+                >0</span
+              ></button
+            ><button
+              id="radio-bluetooth"
+              type="button"
+              class="radio-tab"
+              aria-pressed="false"
+            >
+              <svg class="icon"><use href="#i-bluetooth" /></svg>Bluetooth<span
+                id="bluetooth-count"
+                class="tab-count"
+                >0</span
+              >
+            </button>
+          </div>
+          <span id="updated" class="update-note"
+            >İlk güncelleme bekleniyor</span
+          >
+        </div>
+        <div class="analysis-grid">
+          <section class="panel results-panel" aria-labelledby="results-title">
+            <div class="panel-heading">
+              <div>
+                <h2 id="results-title">
+                  <span id="results-name">Wi-Fi gözlemleri</span>
+                  <span id="result-count" class="count-badge">0</span>
+                </h2>
+                <p id="scope-caption">
+                  Tüm sensörler · her Pi ölçümü ayrı satır
+                </p>
+              </div>
+              <span class="panel-label">KAYNAK GÖZLEMLERİ</span>
+            </div>
+            <div class="filters">
+              <div class="search-field">
+                <svg class="icon"><use href="#i-search" /></svg
+                ><input
+                  id="search"
+                  type="search"
+                  placeholder="Ad, adres veya Pi ara…"
+                  aria-label="Gözlemlerde ara"
+                  autocomplete="off"
+                /><kbd aria-hidden="true">/</kbd>
+              </div>
+              <label id="band-label" class="select-field"
+                ><span class="sr-only">Frekans bandı</span
+                ><select id="band">
+                  <option value="all">Tüm bantlar</option>
+                  <option value="2.4">2.4 GHz</option>
+                  <option value="5">5 GHz</option>
+                  <option value="6">6 GHz</option>
+                  <option value="unknown">Bant bilinmiyor</option>
+                </select></label
+              ><label class="select-field"
+                ><span class="sr-only">Sıralama</span
+                ><select id="sort">
+                  <option value="signal">En güçlü sinyal</option>
+                  <option value="name">Ad A–Z</option>
+                  <option value="node">Sensör</option>
+                  <option value="address">Adres</option>
+                </select></label
+              ><button
+                id="sort-now"
+                class="icon-button"
+                type="button"
+                aria-label="Şimdi yeniden sırala"
+                title="Yeniden sırala; güncellemeler satırları oynatmaz"
+              >
+                <svg class="icon"><use href="#i-refresh" /></svg>
+              </button>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <caption class="sr-only">
+                  Seçili sensörlerin gözlemleri. Ayrıntıları görmek için bir ad
+                  seçin.
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col" id="name-column">AĞ / BSSID</th>
+                    <th scope="col">SİNYAL</th>
+                    <th scope="col" id="channel-column">KANAL</th>
+                    <th scope="col" id="security-column">GÜVENLİK</th>
+                    <th scope="col">SENSÖR</th>
+                    <th scope="col"><span class="sr-only">Ayrıntılar</span></th>
+                  </tr>
+                </thead>
+                <tbody id="results"></tbody>
+              </table>
+              <div id="empty-state" class="empty-state">
+                <svg class="icon"><use href="#i-wifi" /></svg>
+                <h3 id="empty-title">Sensörler bekleniyor</h3>
+                <p id="empty-description">
+                  İlk başarılı taramanın ardından gözlemler burada görünür.
+                </p>
+                <button id="clear-filters" class="button" type="button" hidden>
+                  Filtreleri temizle
+                </button>
+              </div>
+            </div>
+            <div class="table-footer">
+              <span id="results-summary" role="status"
+                >Gözlemler bekleniyor</span
+              ><span id="results-hint"
+                >Ayrıntı için bir satır seçin
+                <span aria-hidden="true">↗</span></span
+              >
+            </div>
+          </section>
+          <aside class="panel details-panel" aria-labelledby="details-title">
+            <div class="panel-heading">
+              <h2 id="details-title">Gözlem ayrıntıları</h2>
+              <span class="panel-label">AYRINTI</span>
+            </div>
+            <div id="details-empty" class="details-empty">
+              <span class="detail-symbol"
+                ><svg class="icon"><use href="#i-search" /></svg
+              ></span>
+              <h3>Bir gözlem seçin</h3>
+              <p>
+                Sinyal, sensör ve bildirilen özellikler için bir gözlem seçin.
+              </p>
+            </div>
+            <div id="details-content" hidden></div>
+          </aside>
+        </div>
+        <div class="charts-grid">
+          <section class="panel chart-panel" aria-labelledby="history-title">
+            <div class="panel-heading">
+              <div>
+                <h2 id="history-title">Zaman içinde sinyal</h2>
+                <p id="history-subtitle">
+                  Sinyalini izlemek için bir gözlem seçin
+                </p>
+              </div>
+              <span class="chart-key"
+                ><i></i><span id="history-key">Seçili gözlem</span></span
+              >
+            </div>
+            <div id="history-chart" class="chart-body"></div>
+            <div class="chart-footer">
+              Bu tarayıcı oturumunda alınan son 60 ölçüm · yalnızca yeni
+              taramalar
+            </div>
+          </section>
           <section
-            id="building"
-            class="panel building-panel"
-            aria-labelledby="building-title"
-            lang="tr"
+            class="panel chart-panel"
+            aria-labelledby="distribution-title"
           >
             <div class="panel-heading">
               <div>
-                <h2 id="building-title">Bina yerleşimi</h2>
-                <p>Katları keşfet. Her Pi'nin gördüklerini incele.</p>
-              </div>
-              <span id="building-summary" class="building-summary"
-                >3 kat · 0 Pi</span
-              >
-            </div>
-            <div class="building-layout">
-              <div class="building-scene">
-                <div class="building-roof" aria-hidden="true">
-                  <span></span>
-                </div>
-                <div class="building-floors">
-                  <section
-                    id="building-floor-3"
-                    class="building-floor"
-                    aria-labelledby="floor-title-3"
-                  >
-                    <div class="floor-label">
-                      <span class="floor-number" aria-hidden="true">03</span>
-                      <h3 id="floor-title-3">3. kat</h3>
-                      <span id="floor-count-3">0 Pi</span>
-                    </div>
-                    <div class="floor-space">
-                      <div id="floor-nodes-3" class="floor-nodes"></div>
-                      <p id="floor-empty-3" class="floor-empty">
-                        Bu katta henüz Pi yok
-                      </p>
-                    </div>
-                  </section>
-                  <section
-                    id="building-floor-2"
-                    class="building-floor"
-                    aria-labelledby="floor-title-2"
-                  >
-                    <div class="floor-label">
-                      <span class="floor-number" aria-hidden="true">02</span>
-                      <h3 id="floor-title-2">2. kat</h3>
-                      <span id="floor-count-2">0 Pi</span>
-                    </div>
-                    <div class="floor-space">
-                      <div id="floor-nodes-2" class="floor-nodes"></div>
-                      <p id="floor-empty-2" class="floor-empty">
-                        Bu katta henüz Pi yok
-                      </p>
-                    </div>
-                  </section>
-                  <section
-                    id="building-floor-1"
-                    class="building-floor"
-                    aria-labelledby="floor-title-1"
-                  >
-                    <div class="floor-label">
-                      <span class="floor-number" aria-hidden="true">01</span>
-                      <h3 id="floor-title-1">1. kat</h3>
-                      <span id="floor-count-1">0 Pi</span>
-                    </div>
-                    <div class="floor-space">
-                      <div id="floor-nodes-1" class="floor-nodes"></div>
-                      <p id="floor-empty-1" class="floor-empty">
-                        Bu katta henüz Pi yok
-                      </p>
-                    </div>
-                  </section>
-                </div>
-                <div class="building-ground" aria-hidden="true">
-                  <span>GİRİŞ</span>
-                </div>
-                <div class="building-legend">
-                  <span><i class="status-dot"></i>Çevrimiçi</span>
-                  <span><i class="status-dot offline-dot"></i>Çevrimdışı</span>
-                  <span><i class="status-dot error-dot"></i>Radyo hatası</span>
-                </div>
-              </div>
-              <aside class="placement-panel" aria-label="Pi kat yerleşimi">
-                <div class="placement-heading">
-                  <span class="panel-label">SEÇİLİ PI</span>
-                  <button
-                    id="building-all"
-                    class="building-all active"
-                    type="button"
-                    aria-pressed="true"
-                  >
-                    Tüm Pi'ler
-                  </button>
-                </div>
-                <div id="placement-empty" class="placement-empty">
-                  <span class="placement-symbol"
-                    ><svg class="icon" aria-hidden="true">
-                      <use href="#i-node" /></svg
-                  ></span>
-                  <h3>Bir Pi seçin</h3>
-                  <p>
-                    Binadaki bir cihaza tıklayarak sonuçlarını görün ve
-                    bulunduğu katı seçin.
-                  </p>
-                </div>
-                <div id="placement-selection" hidden>
-                  <span id="placement-state" class="placement-state"></span>
-                  <h3 id="placement-node-name"></h3>
-                  <p id="placement-location" class="placement-location"></p>
-                  <label class="placement-field" for="placement-floor"
-                    >Bulunduğu kat</label
-                  >
-                  <select id="placement-floor">
-                    <option value="1">1. kat</option>
-                    <option value="2">2. kat</option>
-                    <option value="3">3. kat</option>
-                    <option value="unplaced">Yerleştirilmemiş</option>
-                  </select>
-                  <div class="placement-radios">
-                    <p>
-                      <svg class="icon" aria-hidden="true">
-                        <use href="#i-wifi" /></svg
-                      ><span id="placement-wifi"></span>
-                    </p>
-                    <p>
-                      <svg class="icon" aria-hidden="true">
-                        <use href="#i-bluetooth" /></svg
-                      ><span id="placement-bluetooth"></span>
-                    </p>
-                  </div>
-                </div>
-                <div class="placement-help">
-                  <p>Bir katta birden fazla Pi olabilir.</p>
-                  <p id="placement-note" role="status">
-                    Kat seçimleri bu tarayıcıda saklanır.
-                  </p>
-                </div>
-              </aside>
-            </div>
-            <div id="building-unplaced" class="building-unplaced" hidden>
-              <div class="unplaced-heading">
-                <h3>
-                  Yerleştirilmemiş Pi'ler
-                  <span id="unplaced-count" class="count-badge">0</span>
-                </h3>
-                <p>Bir cihaz seçip katını belirleyin.</p>
-              </div>
-              <div id="unplaced-nodes" class="floor-nodes"></div>
-            </div>
-          </section>
-          <section class="metrics" aria-label="Workspace summary">
-            <article class="metric">
-              <div class="metric-top">
-                Scanners online<svg class="icon"><use href="#i-node" /></svg>
-              </div>
-              <div class="metric-value">
-                <strong id="online-value">—</strong
-                ><span id="online-total"></span>
-              </div>
-              <p id="online-note">Waiting for reports</p>
-            </article>
-            <article class="metric">
-              <div class="metric-top" id="observations-label">
-                Wi-Fi observations<svg class="icon"><use href="#i-wifi" /></svg>
-              </div>
-              <div class="metric-value">
-                <strong id="observations-value">—</strong
-                ><span class="metric-tag">LATEST</span>
-              </div>
-              <p id="observations-note">In the selected scope</p>
-            </article>
-            <article class="metric">
-              <div class="metric-top">
-                Strongest signal<svg class="icon"><use href="#i-signal" /></svg>
-              </div>
-              <div class="metric-value">
-                <strong id="signal-value">—</strong
-                ><span id="signal-unit"></span>
-              </div>
-              <p id="signal-note">Waiting for observations</p>
-            </article>
-            <article class="metric">
-              <div class="metric-top">
-                Scan errors<svg class="icon"><use href="#i-alert" /></svg>
-              </div>
-              <div class="metric-value">
-                <strong id="errors-value">—</strong
-                ><span id="errors-tag" class="metric-tag">RADIOS</span>
-              </div>
-              <p id="errors-note">Bluetooth and Wi-Fi</p>
-            </article>
-          </section>
-          <div class="analyzer-bar">
-            <div class="radio-tabs" role="group" aria-label="Radio type">
-              <button
-                id="radio-wifi"
-                type="button"
-                class="radio-tab active"
-                aria-pressed="true"
-              >
-                <svg class="icon"><use href="#i-wifi" /></svg>Wi-Fi<span
-                  id="wifi-count"
-                  class="tab-count"
-                  >0</span
-                ></button
-              ><button
-                id="radio-bluetooth"
-                type="button"
-                class="radio-tab"
-                aria-pressed="false"
-              >
-                <svg class="icon"><use href="#i-bluetooth" /></svg
-                >Bluetooth<span id="bluetooth-count" class="tab-count">0</span>
-              </button>
-            </div>
-            <span id="updated" class="update-note"
-              >Waiting for first update</span
-            >
-          </div>
-          <div class="analysis-grid">
-            <section
-              class="panel results-panel"
-              aria-labelledby="results-title"
-            >
-              <div class="panel-heading">
-                <div>
-                  <h2 id="results-title">
-                    <span id="results-name">Nearby access points</span>
-                    <span id="result-count" class="count-badge">0</span>
-                  </h2>
-                  <p id="scope-caption">
-                    All scanners · one observation per Pi
-                  </p>
-                </div>
-                <span class="panel-label">LIVE VIEW</span>
-              </div>
-              <div class="filters">
-                <div class="search-field">
-                  <svg class="icon"><use href="#i-search" /></svg
-                  ><input
-                    id="search"
-                    type="search"
-                    placeholder="Search name, address or Pi…"
-                    aria-label="Search observations"
-                    autocomplete="off"
-                  /><kbd aria-hidden="true">/</kbd>
-                </div>
-                <label id="band-label" class="select-field"
-                  ><span class="sr-only">Frequency band</span
-                  ><select id="band">
-                    <option value="all">All bands</option>
-                    <option value="2.4">2.4 GHz</option>
-                    <option value="5">5 GHz</option>
-                    <option value="6">6 GHz</option>
-                    <option value="unknown">Unknown band</option>
-                  </select></label
-                ><label class="select-field"
-                  ><span class="sr-only">Sort results</span
-                  ><select id="sort">
-                    <option value="signal">Strongest signal</option>
-                    <option value="name">Name A–Z</option>
-                    <option value="node">Scanner</option>
-                    <option value="address">Address</option>
-                  </select></label
-                ><button
-                  id="sort-now"
-                  class="icon-button"
-                  type="button"
-                  aria-label="Sort results now"
-                  title="Sort now; row order stays stable between updates"
-                >
-                  <svg class="icon"><use href="#i-refresh" /></svg>
-                </button>
-              </div>
-              <div class="table-scroll">
-                <table>
-                  <caption class="sr-only">
-                    Observations from the selected scanners. Select a name to
-                    inspect its details.
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col" id="name-column">NETWORK / BSSID</th>
-                      <th scope="col">SIGNAL</th>
-                      <th scope="col" id="channel-column">CHANNEL</th>
-                      <th scope="col" id="security-column">SECURITY</th>
-                      <th scope="col">SCANNER</th>
-                      <th scope="col"><span class="sr-only">Details</span></th>
-                    </tr>
-                  </thead>
-                  <tbody id="results"></tbody>
-                </table>
-                <div id="empty-state" class="empty-state">
-                  <svg class="icon"><use href="#i-wifi" /></svg>
-                  <h3 id="empty-title">Listening for your scanners</h3>
-                  <p id="empty-description">
-                    Results appear here when a Pi sends its first scan.
-                  </p>
-                  <button
-                    id="clear-filters"
-                    class="button"
-                    type="button"
-                    hidden
-                  >
-                    Clear filters
-                  </button>
-                </div>
-              </div>
-              <div class="table-footer">
-                <span id="results-summary" role="status"
-                  >Waiting for reports</span
-                ><span id="results-hint"
-                  >Select a row to inspect
-                  <span aria-hidden="true">↗</span></span
-                >
-              </div>
-            </section>
-            <aside class="panel details-panel" aria-labelledby="details-title">
-              <div class="panel-heading">
-                <h2 id="details-title">Observation details</h2>
-                <span class="panel-label">INSPECT</span>
-              </div>
-              <div id="details-empty" class="details-empty">
-                <span class="detail-symbol"
-                  ><svg class="icon"><use href="#i-search" /></svg
-                ></span>
-                <h3>A closer look</h3>
-                <p>
-                  Select an observation to see its signal, scanner, and reported
-                  properties.
+                <h2 id="distribution-title">Kanal dağılımı</h2>
+                <p id="distribution-subtitle">
+                  Bant ve kanala göre erişim noktaları
                 </p>
               </div>
-              <div id="details-content" hidden></div>
-            </aside>
-          </div>
-          <div class="charts-grid">
-            <section class="panel chart-panel" aria-labelledby="history-title">
-              <div class="panel-heading">
-                <div>
-                  <h2 id="history-title">Signal over time</h2>
-                  <p id="history-subtitle">
-                    Select an observation to follow its signal
-                  </p>
-                </div>
-                <span class="chart-key"
-                  ><i></i
-                  ><span id="history-key">Selected observation</span></span
-                >
-              </div>
-              <div id="history-chart" class="chart-body"></div>
-              <div class="chart-footer">
-                New scan reports only · last 60 samples in this browser session
-              </div>
-            </section>
-            <section
-              class="panel chart-panel"
-              aria-labelledby="distribution-title"
-            >
-              <div class="panel-heading">
-                <div>
-                  <h2 id="distribution-title">Channel usage</h2>
-                  <p id="distribution-subtitle">
-                    Access points by band and channel
-                  </p>
-                </div>
-                <span class="panel-label" id="distribution-label">WI-FI</span>
-              </div>
-              <div id="distribution-chart" class="chart-body"></div>
-              <div id="distribution-note" class="chart-footer">
-                Unique BSSIDs in the filtered results · access point count, not
-                airtime
-              </div>
-            </section>
-          </div>
-          <footer class="page-footer">
-            <span
-              ><span class="live-dot"></span>
-              <span id="footer-status"
-                >Automatic updates every 2 seconds</span
-              ></span
-            ><span id="radio-note"
-              >Wi-Fi shows access points, not connected clients.</span
-            >
-          </footer>
-          <noscript
-            ><p class="notice">
-              Enable JavaScript to view scanner reports.
-            </p></noscript
-          >
-        </main>
+              <span class="panel-label" id="distribution-label">WI-FI</span>
+            </div>
+            <div id="distribution-chart" class="chart-body"></div>
+            <div id="distribution-note" class="chart-footer">
+              Filtrelenen farklı BSSID sayısı · trafik yoğunluğunu göstermez
+            </div>
+          </section>
+        </div>
+        <p id="radio-note" class="analysis-note"></p>
+      </section>
+      <footer class="workspace-footer">
+        <span
+          >Wi-Fi erişim noktalarını ve Bluetooth yayınlarını gösterir; ağa bağlı
+          istemcileri veya trafik kalitesini ölçmez.</span
+        ><span id="footer-status">Güncelleniyor</span>
+      </footer>
+      <noscript
+        ><p class="notice">
+          Gözlemleri görmek için JavaScript'i etkinleştirin.
+        </p></noscript
+      >
+    </main>
+    <dialog id="device-drawer" aria-labelledby="device-title">
+      <div class="drawer-heading">
+        <span class="panel-label">CİHAZ AYRINTILARI</span
+        ><button
+          id="device-close"
+          class="icon-button"
+          type="button"
+          aria-label="Ayrıntıları kapat"
+        >
+          ✕
+        </button>
       </div>
-    </div>
+      <div id="device-identity"></div>
+      <section class="drawer-sources">
+        <h3>Gözlem kaynakları</h3>
+        <p class="subtle">
+          Her Pi'nin sinyali kendi ölçümüdür. Katlar sensörün bulunduğu yeri
+          belirtir.
+        </p>
+        <div id="device-sources"></div>
+      </section>
+      <section class="drawer-history">
+        <div class="drawer-chart-heading">
+          <h3>Sinyal geçmişi</h3>
+          <span id="device-history-key" class="subtle"></span>
+        </div>
+        <p id="device-history-subtitle" class="subtle"></p>
+        <div id="device-history-chart" class="chart-body"></div>
+        <p class="subtle">
+          Bu tarayıcı oturumundaki son 60 ölçüm. RSSI mesafe veya bağlantı
+          kalitesi değildir.
+        </p>
+      </section>
+      <button id="device-open-analysis" type="button" class="button">
+        Seçili kaynağın analizini aç →
+      </button>
+      <details class="raw-details">
+        <summary>Seçili kaynağın WiGLE kaydı</summary>
+        <pre id="device-raw"></pre>
+      </details>
+    </dialog>
   </body>
 </html>

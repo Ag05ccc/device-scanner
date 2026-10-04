@@ -88,7 +88,8 @@ class DevelopmentTests(unittest.TestCase):
         self.wait_for(lambda: self.healthy(3), "three dummy nodes never became ready")
         for node in self.nodes():
             for radio, scan in node["radios"].items():
-                self.assertEqual(len(scan["observations"]), 1)
+                self.assertGreaterEqual(len(scan["observations"]), 7 if radio == "wifi" else 11)
+                self.assertLessEqual(len(scan["observations"]), 9 if radio == "wifi" else 13)
                 record = scan["observations"][0]
                 self.assertEqual(tuple(record), COLUMNS)
                 validate_record(record, radio)

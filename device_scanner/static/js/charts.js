@@ -15,20 +15,20 @@ function placeholder(container, message) {
   container.replaceChildren(element("div", "chart-placeholder", message));
 }
 
-export function renderHistory(row, history, connected) {
-  $("history-key").textContent = row ? row.nodeId : "Selected observation";
-  $("history-subtitle").textContent = row
-    ? `${row.name} · RSSI (dBm)${!connected ? " · outdated" : ""}`
-    : "Select an observation to follow its signal";
-  const container = $("history-chart");
+export function renderHistory(row, history, connected, prefix = "history") {
+  $(prefix + "-key").textContent = row ? row.nodeId : "Seçili gözlem";
+  $(prefix + "-subtitle").textContent = row
+    ? `${row.name} · RSSI (dBm)${!connected ? " · güncel değil" : ""}`
+    : "Sinyalini izlemek için bir gözlem seçin";
+  const container = $(prefix + "-chart");
   const samples = row ? history.get(row.id)?.samples || [] : [];
   const known = samples.filter((sample) => isNumber(sample.value));
   if (!known.length) {
     placeholder(
       container,
       row
-        ? "No signal measurement reported yet."
-        : "Select a result to see its signal history.",
+        ? "Henüz sinyal ölçümü bildirilmedi."
+        : "Sinyal geçmişini görmek için bir gözlem seçin.",
     );
     return;
   }
@@ -39,7 +39,7 @@ export function renderHistory(row, history, connected) {
   const x = (sample) => 43 + ((sample.time - first) / span) * 457;
   const y = (sample) =>
     132 - Math.max(0, Math.min(1, (sample.value - min) / (max - min))) * 116;
-  const description = `${row.name}, ${known.length} received signal measurements. Latest: ${signalText(known.at(-1).value)}.`;
+  const description = `${row.name}, ${known.length} sinyal ölçümü. Son ölçüm: ${signalText(known.at(-1).value)}.`;
   const svg = chart(description);
   for (let index = 0; index <= 4; index++) {
     const height = 16 + index * 29;
@@ -87,7 +87,7 @@ export function renderHistory(row, history, connected) {
         svgElement(
           "title",
           {},
-          `${new Date(sample.time).toLocaleTimeString()} · ${signalText(sample.value)}`,
+          `${new Date(sample.time).toLocaleTimeString("tr-TR")} · ${signalText(sample.value)}`,
         ),
       );
       svg.append(point);
@@ -103,7 +103,7 @@ export function renderHistory(row, history, connected) {
     svgElement(
       "text",
       { x: 43, y: 155, class: "chart-label" },
-      new Date(first).toLocaleTimeString(),
+      new Date(first).toLocaleTimeString("tr-TR"),
     ),
   );
   svg.append(
@@ -111,8 +111,8 @@ export function renderHistory(row, history, connected) {
       "text",
       { x: 500, y: 155, "text-anchor": "end", class: "chart-label" },
       known.length === 1
-        ? "First sample"
-        : new Date(samples.at(-1).time).toLocaleTimeString(),
+        ? "İlk ölçüm"
+        : new Date(samples.at(-1).time).toLocaleTimeString("tr-TR"),
     ),
   );
   container.replaceChildren(svg);
@@ -121,10 +121,10 @@ export function renderHistory(row, history, connected) {
 export function renderDistribution(rows, radio, connected) {
   const wifi = radio === "wifi";
   $("distribution-title").textContent = wifi
-    ? "Channel usage"
-    : "Signal distribution";
+    ? "Kanallara göre erişim noktaları"
+    : "Sinyal dağılımı";
   $("distribution-subtitle").textContent =
-    `${wifi ? "Access points by band and channel" : "Bluetooth observations by RSSI"}${!connected ? " · outdated" : ""}`;
+    `${wifi ? "Bant ve kanala göre gözlenen erişim noktası sayısı" : "RSSI değerine göre Bluetooth gözlemleri"}${!connected ? " · güncel değil" : ""}`;
   $("distribution-label").textContent = wifi ? "WI-FI" : "BLUETOOTH";
   const latest = rows.filter((row) => row.state === "latest");
   const missing = latest.filter((row) =>
@@ -132,42 +132,44 @@ export function renderDistribution(rows, radio, connected) {
   ).length;
   $("distribution-note").textContent =
     (wifi
-      ? "Unique BSSIDs in filtered results · count, not airtime"
-      : "Filtered observations per Pi · RSSI does not measure distance") +
-    (missing ? ` · ${missing} unknown ${wifi ? "channel" : "signal"}` : "");
+      ? "Her BSSID bir kez sayılır · çubuklar kanal doluluğunu ölçmez"
+      : "Her Pi’nin gözlemleri ayrı sayılır · RSSI mesafeyi ölçmez") +
+    (missing
+      ? ` · ${missing} kaydın ${wifi ? "kanalı" : "sinyali"} bilinmiyor`
+      : "");
   const bars = wifi
     ? channelCounts(latest).map((entry) => ({
-        label: `Ch ${entry.channel}`,
+        label: `Kanal ${entry.channel}`,
         sublabel:
-          entry.band === "unknown" ? "Unknown band" : `${entry.band} GHz`,
+          entry.band === "unknown" ? "Bant bilinmiyor" : `${entry.band} GHz`,
         count: entry.count,
       }))
     : [
         {
-          label: "Strong",
+          label: "Güçlü",
           sublabel: "≥ −50 dBm",
           count: latest.filter(
             (row) => row.signal !== null && row.signal >= -50,
           ).length,
         },
         {
-          label: "Good",
-          sublabel: "−70 to −51",
+          label: "İyi",
+          sublabel: "−70 … −51",
           count: latest.filter(
             (row) =>
               row.signal !== null && row.signal >= -70 && row.signal < -50,
           ).length,
         },
         {
-          label: "Fair",
-          sublabel: "−85 to −71",
+          label: "Orta",
+          sublabel: "−85 … −71",
           count: latest.filter(
             (row) =>
               row.signal !== null && row.signal >= -85 && row.signal < -70,
           ).length,
         },
         {
-          label: "Weak",
+          label: "Zayıf",
           sublabel: "< −85 dBm",
           count: latest.filter((row) => row.signal !== null && row.signal < -85)
             .length,
@@ -178,8 +180,8 @@ export function renderDistribution(rows, radio, connected) {
     placeholder(
       container,
       wifi
-        ? "No channel data in the latest matching results."
-        : "No signal data in the latest matching results.",
+        ? "Güncel sonuçlarda kanal ölçümü yok."
+        : "Güncel sonuçlarda sinyal ölçümü yok.",
     );
     return;
   }

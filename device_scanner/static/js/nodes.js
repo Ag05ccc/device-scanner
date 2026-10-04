@@ -1,66 +1,88 @@
-import { $, element, icon } from "./ui.js";
+import { $, element, ageText, setText } from "./ui.js";
 import { floorFor, floorLabel } from "./placement.js";
 
-export function renderNodes(nodes, view, connected, placements) {
-  $("sidebar-count").textContent = nodes.length;
-  $("node-count").textContent = nodes.length;
-  $("all-nodes").classList.toggle("active", view.nodeId === "all");
-  $("all-nodes").setAttribute("aria-pressed", view.nodeId === "all");
-  const container = $("nodes");
-  const existing = new Map(
-    [...container.querySelectorAll(".node-button")].map((button) => [
-      button.dataset.nodeId,
-      button,
-    ]),
+export function radioState(node, radio, connected) {
+  const scan = node.radios[radio];
+  if (scan.enabled === false) return "Kapalı";
+  if (!connected) return "Durum bilinmiyor";
+  if (!node.online) return "Sensör çevrimdışı";
+  return (
+    {
+      fresh: "Güncel",
+      error: "Tarama hatası",
+      stale: "Tarama gecikti",
+      waiting: "İlk tarama bekleniyor",
+      disabled: "Kapalı",
+    }[scan.freshness] || "İlk tarama bekleniyor"
   );
-  if (!nodes.length) {
-    container.replaceChildren(
-      element("p", "sidebar-empty", "Waiting for your first Pi…"),
-    );
-    return;
-  }
-  container.querySelector(".sidebar-empty")?.remove();
+}
+
+export function renderNodes(nodes, view, connected, placements) {
+  const tbody = $("nodes");
+  const old = new Map(
+    [...tbody.children].map((row) => [row.dataset.nodeId, row]),
+  );
   for (const node of nodes) {
-    let button = existing.get(node.node_id);
-    if (!button) {
-      button = element("button", "node-button");
+    let row = old.get(node.node_id);
+    if (!row) {
+      row = element("tr");
+      row.dataset.nodeId = node.node_id;
+      const name = element("td");
+      const button = element("button", "text-button", node.node_id);
       button.type = "button";
-      button.dataset.nodeId = node.node_id;
-      const symbol = element("span", "node-symbol");
-      symbol.append(icon("node"));
-      const label = element("span");
-      label.append(
-        element("span", "node-name", node.node_id),
-        element("span", "node-meta"),
+      name.append(
+        button,
+        element(
+          "small",
+          "cell-secondary",
+          node.scanner === "dummy" ? "Demo sensör" : "Gerçek sensör",
+        ),
       );
-      const status = element("span", "node-state");
-      status.append(
-        element("span", "status-dot"),
-        element("span", "state-label"),
+      row.append(
+        name,
+        element("td", "sensor-floor"),
+        element("td", "sensor-connection"),
       );
-      button.append(symbol, label, status);
-      container.append(button);
+      for (const radio of ["wifi", "bluetooth"]) {
+        const cell = element("td", "sensor-" + radio);
+        cell.append(
+          element("span"),
+          element("small", "cell-secondary"),
+          element("small", "sensor-error"),
+        );
+        row.append(cell);
+      }
+      tbody.append(row);
     }
-    existing.delete(node.node_id);
-    const scan = node.radios[view.radio];
-    const state = !connected
-      ? "Unknown"
-      : !node.online
-        ? "Offline"
-        : scan.status === "error"
-          ? "Error"
-          : "Online";
-    button.querySelector(".node-meta").textContent =
-      `${floorLabel(floorFor(node.node_id, placements))} · ${node.scanner === "dummy" ? "Dummy" : "Real Pi"} · ${scan.status === "waiting" ? "waiting" : `${scan.observations.length} ${scan.status === "error" || !node.online ? "previous" : "results"}`}`;
-    button.querySelector(".state-label").textContent = state;
-    button.querySelector(".node-state").className =
-      `node-state ${state === "Error" ? "error" : state !== "Online" ? "offline" : ""}`;
-    button.classList.toggle("active", view.nodeId === node.node_id);
-    button.setAttribute("aria-pressed", view.nodeId === node.node_id);
-    button.setAttribute(
-      "aria-label",
-      `${node.node_id}, ${state}, ${scan.observations.length} observations`,
+    old.delete(node.node_id);
+    setText(
+      row.querySelector("td:first-child small"),
+      node.scanner === "dummy" ? "Demo sensör" : "Gerçek sensör",
     );
+    row.classList.toggle("selected", view.nodeId === node.node_id);
+    setText(
+      row.querySelector(".sensor-floor"),
+      floorLabel(floorFor(node.node_id, placements)),
+    );
+    setText(
+      row.querySelector(".sensor-connection"),
+      !connected ? "Bilinmiyor" : node.online ? "Çevrimiçi" : "Çevrimdışı",
+    );
+    for (const radio of ["wifi", "bluetooth"]) {
+      const cell = row.querySelector(".sensor-" + radio);
+      const scan = node.radios[radio];
+      setText(cell.querySelector("span"), radioState(node, radio, connected));
+      cell.dataset.state = scan.freshness;
+      setText(
+        cell.querySelector(".cell-secondary"),
+        scan.last_success_at
+          ? `Son başarılı: ${ageText(scan.last_success_at)}`
+          : "Başarılı tarama yok",
+      );
+      setText(cell.querySelector(".sensor-error"), scan.error || "");
+      cell.querySelector(".sensor-error").hidden = !scan.error;
+    }
   }
-  for (const button of existing.values()) button.remove();
+  for (const row of old.values()) row.remove();
+  $("sensors-empty").hidden = nodes.length > 0;
 }

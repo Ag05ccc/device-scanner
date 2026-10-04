@@ -2,14 +2,16 @@
 
 ## Known bugs and logic issues (review of 2026-10-03)
 
-These came from a full code review. All 18 tests in `tests/` pass, so none of these issues are covered by the tests.
+These came from the original code review. At that time all 18 tests in `tests/`
+passed without covering these issues. Resolved entries below describe subsequent
+changes and regression coverage; the original findings are retained for context.
 
 **Reproduced** means the issue was confirmed with a throwaway script, using either an in-memory `dbus_fast` stub or a real in-process server. Line numbers refer to the code as of this review.
 
 | # | Issue | Severity | Where | Status |
 |---|-------|----------|-------|--------|
 | 1 | Wi-Fi scan can drop networks it actually found | Medium | `scanners/wifi.py` | Open |
-| 2 | Radio data never expires; disabled radios look "waiting" | Medium | `server.py`, `static/js/` | Open |
+| 2 | Radio data never expires; disabled radios look "waiting" | Medium | `server.py`, `static/js/` | Resolved 2026-10-04; bounded observation history added |
 | 3 | Rejected reports leave no useful trace | Medium | `node.py`, `server.py` | Open |
 | 4 | Dashboard rebuilds the whole page every 2 s | Medium (UX) | `static/js/results.js`, `static/js/details.js` | Resolved in analyzer dashboard |
 | 5 | Bluetooth "connect timed out" message is unreachable | Low | `scanners/bluetooth.py` | Open |
@@ -45,7 +47,45 @@ These came from a full code review. All 18 tests in `tests/` pass, so none of th
 
 ### 2. Radio data never expires; disabled radios look "waiting"
 
-*Reproduced in the original dashboard.* Code: [server.py](device_scanner/server.py) (`accept_report`, `snapshot`). The current [frontend guide](docs/frontend.md) documents the remaining API limitations.
+*Reproduced in the original dashboard.* Code: [server.py](device_scanner/server.py)
+(`accept_report`, `snapshot`).
+
+**Resolved (2026-10-04):** node heartbeats declare `enabled_radios` and
+`expected_cycle_seconds` (`timeout + interval`). The server tracks per-radio
+`last_success_at`, `success_age_seconds`, `last_error_at` and `freshness`, separately
+from heartbeat age and the latest report timestamps. Freshness expires at
+`max(30 seconds, 2 × expected cycle)`. Disabled radios, initial waiting, errors
+and stale scans are distinct states. Older clients without metadata retain
+unknown enablement until a scan arrives.
+
+Errors no longer date retained measurements as though they were newly seen:
+last-success receipt time remains available in the UI/export, and a retained
+export's `report_observed_at` is `null` after an error rather than the error time.
+Successful empty scans clear the latest technical observations. The device view
+has a separate 60-second absence tolerance and only declares absence after at
+least two successful missing scans and `max(60 seconds, 3 × expected cycle)`;
+source outages remain uncertain. Errors do not count as missing scans.
+
+Source history expires after fifteen minutes with a combined 10,000-record cap;
+the shared discovery ledger also has a combined 10,000-identity cap. First scans
+establish baselines, later new addresses are marked for ten minutes, and browser
+reloads preserve this server-session state. Scanner mode changes clear the
+affected Pi's old radio/source history; discovery metadata is separated by mode
+to avoid presenting synthetic sightings as real history.
+
+Regression cases in [test_monitoring.py](tests/test_monitoring.py) and
+[test_server.py](tests/test_server.py) cover stale radios with live heartbeats,
+errors retaining the successful timestamp, disabled metadata, absent/empty scans,
+baseline/new flags, mode changes, expiry and history bounds. Browser/data-model
+checks cover the resulting device states. See [frontend guide](docs/frontend.md)
+for the current rules.
+
+**Remaining limits:** history is not persisted across server restarts. Latest
+successful source scans remain available for technical inspection, labeled stale
+when appropriate. Node registrations and those latest scans are not globally
+capped; issue #8 remains open. The history limits alone do not bound all memory.
+
+**Original finding**
 
 **Problem**
 - A node's `online` flag is driven only by heartbeats, and the data for each radio has no age.
@@ -144,6 +184,12 @@ The README requires 3.11+, but Ubuntu 22.04 ships 3.10. This was not run on 3.10
 ### 8. Server memory is unbounded
 
 Code: [server.py:110](device_scanner/server.py#L110) (`accept_report`), [server.py:124-133](device_scanner/server.py#L124-L133) (`snapshot`).
+
+**Still open after the 2026-10-04 changes:** short-term source history and the
+discovery ledger are bounded, but the node registry and each radio's latest
+successful scan are still retained without a global node-count limit. These
+structures are still deep-copied for snapshots. The new history limits do not
+resolve this original server-memory issue.
 
 **Problem**
 - Any client can register unlimited node IDs, each holding up to 1 MiB per radio, and they are never removed.

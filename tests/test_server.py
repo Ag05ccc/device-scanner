@@ -3,8 +3,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 import json
+from pathlib import Path
+import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -98,7 +101,7 @@ class ServerTests(unittest.TestCase):
         for report in bad_reports:
             with self.subTest(report=report):
                 self.assertEqual(self.request("/api/reports", report)[0], 400)
-        self.assertEqual(self.request("/api/nodes")[1], {"nodes": []})
+        self.assertEqual(self.request("/api/nodes")[1]["nodes"], [])
 
     def test_invalid_wigle_fields_and_duplicates_are_rejected(self):
         for changes in ({"Type": "WIFI"}, {"MAC": "invalid"}, {"Channel": 6},
@@ -113,7 +116,57 @@ class ServerTests(unittest.TestCase):
         report = self.scan()
         report["observations"] *= 2
         self.assertEqual(self.request("/api/reports", report)[0], 400)
-        self.assertEqual(self.request("/api/nodes")[1], {"nodes": []})
+        self.assertEqual(self.request("/api/nodes")[1]["nodes"], [])
+
+    def test_invalid_radio_metadata_is_rejected(self):
+        bad_metadata = [
+            {"enabled_radios": "wifi"}, {"enabled_radios": ["wifi", "wifi"]},
+            {"enabled_radios": ["zigbee"]}, {"enabled_radios": [[]]},
+            {"expected_cycle_seconds": []}, {"expected_cycle_seconds": {"zigbee": 30}},
+            *({"expected_cycle_seconds": {"wifi": value}}
+              for value in (None, True, "20", 0, -1, 86401, 10 ** 400, float("inf"))),
+        ]
+        for metadata in bad_metadata:
+            with self.subTest(metadata=metadata):
+                self.assertEqual(self.request("/api/reports", self.heartbeat(**metadata))[0], 400)
+        self.assertEqual(self.request("/api/nodes")[1]["nodes"], [])
+
+    def test_shared_floor_assignment_defaults_validation_and_unassign(self):
+        for node_id in ("pi-01", "pi-2", "pi-3", "pi-4"):
+            self.request("/api/reports", self.heartbeat(node_id=node_id))
+        nodes = self.request("/api/nodes")[1]["nodes"]
+        self.assertEqual({node["node_id"]: node["floor"] for node in nodes},
+                         {"pi-01": 1, "pi-2": 2, "pi-3": 3, "pi-4": None})
+        self.assertEqual(self.request("/api/placements", {"node_id": "pi-01", "floor": 2})[0], 200)
+        self.assertEqual(self.request("/api/placements")[1]["placements"]["pi-01"], 2)
+        self.assertEqual(self.request("/api/nodes")[1]["nodes"][0]["floor"], 2)
+        self.request("/api/placements", {"node_id": "pi-01", "floor": None})
+        self.assertIsNone(self.request("/api/nodes")[1]["nodes"][0]["floor"])
+        for floor in (True, 0, 4, 1.5, "2", {}):
+            self.assertEqual(self.request("/api/placements", {"node_id": "pi-01", "floor": floor})[0], 400)
+        for bad in ({}, {"node_id": "pi-01"}, {"node_id": "bad/path", "floor": 2}):
+            self.assertEqual(self.request("/api/placements", bad)[0], 400)
+
+    def test_floor_assignments_survive_restart_and_failed_write_preserves_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state" / "placements.json"
+            self.server.placements.path = path
+            self.request("/api/placements", {"node_id": "pi-01", "floor": None})
+            self.request("/api/placements", {"node_id": "pi-02", "floor": 1})
+            original = path.read_bytes()
+            with patch("device_scanner.placements.os.replace", side_effect=OSError("read-only")):
+                status, response = self.request("/api/placements", {"node_id": "pi-02", "floor": 3})
+            self.assertEqual(status, 500)
+            self.assertIn("previous assignment retained", response["error"])
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(self.request("/api/placements")[1]["placements"]["pi-02"], 1)
+            self.assertEqual(list(path.parent.iterdir()), [path])
+            with make_server(port=0, placement_path=path) as restarted:
+                self.assertEqual(restarted.placement_snapshot()["placements"], {"pi-01": None, "pi-02": 1})
+                self.assertNotEqual(restarted.session_started_at, self.server.session_started_at)
+            path.write_text('{"pi-02": 9}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Invalid floor assignments"):
+                make_server(port=0, placement_path=path)
 
     def test_malformed_or_oversize_json_is_rejected(self):
         for raw in (b"{", b"\xff", b'{"number":1e400}', b"[" * 2000 + b"]" * 2000):

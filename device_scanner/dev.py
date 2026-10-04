@@ -29,7 +29,8 @@ def stop_children(children):
             child.wait()
 
 
-def run(*, nodes=3, port=8001, interval=2.0):
+def run(*, nodes=3, port=8001, interval=2.0,
+        placements_file=".device-scanner/placements.json"):
     """One localhost server plus N independently stoppable dummy nodes."""
     # Fail before spawning anything when a different process already owns this port.
     with socket.socket() as probe:
@@ -53,7 +54,8 @@ def run(*, nodes=3, port=8001, interval=2.0):
 
     try:
         server = launch("server", ["server", "--port", str(port),
-                                   "--offline-after", str(max(6.0, interval * 3))])
+                                   "--offline-after", str(max(6.0, interval * 3)),
+                                   "--placements-file", str(Path(placements_file).resolve())])
         address = f"http://127.0.0.1:{port}"
         deadline = time.monotonic() + 10
         while not stopped.is_set():

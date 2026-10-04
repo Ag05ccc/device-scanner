@@ -1,6 +1,6 @@
 # Device Scanner
 
-Bir bilgisayarda **bir server ve üç bağımsız Raspberry Pi node'u** gibi çalışan küçük bir Python projesi. Bilgisayardaki node'lar sahte tarama verisi üretir. Raspberry Pi'ye aynı kaynak kodu aktarılır; `--scanner real` ile gerçek Bluetooth/BLE ve Wi-Fi taraması kullanılır.
+Binadaki **Wi-Fi erişim noktalarını ve Bluetooth yayınlarını** tek ekranda izleyen küçük bir Python projesi. Bir sunucu, farklı katlardaki bağımsız Raspberry Pi sensörlerinden rapor toplar. Geliştirme bilgisayarında aynı düzen dummy node süreçleriyle çalışır; Raspberry Pi'de `--scanner real` gerçek Bluetooth/BLE ve Wi-Fi taramasını kullanır.
 
 ```text
 Tarayıcı ──► Server :8001 ◄── pi-01
@@ -18,7 +18,7 @@ python3 -m venv .venv
 .venv/bin/python -m device_scanner dev
 ```
 
-Tarayıcıdan **http://127.0.0.1:8001** adresini aç. Üç node'un bağlantısını, Bluetooth/Wi-Fi sonuçlarını ve hata durumlarını görebilirsin. **Ctrl+C** bu komutun başlattığı bütün süreçleri kapatır.
+Tarayıcıdan **http://127.0.0.1:8001** adresini aç. Açılışta bina genelindeki tekil Wi-Fi/Bluetooth kayıtları, gözlem güncelliği, cihaz listesi ve kısa kat özeti görünür. **Ctrl+C** bu komutun başlattığı bütün süreçleri kapatır.
 
 Node sayısını veya portu değiştirmek için:
 
@@ -26,9 +26,18 @@ Node sayısını veya portu değiştirmek için:
 .venv/bin/python -m device_scanner dev --nodes 5 --port 8002
 ```
 
+Tarama aralığını ve ortak kat dosyasını ayrıca seçebilirsin:
+
+```bash
+.venv/bin/python -m device_scanner dev --nodes 3 --interval 2 \
+  --placements-file .device-scanner/demo-placements.json
+```
+
 Her node ayrı bir işletim sistemi sürecidir. Başlangıçta yazılan PID'lerden birini `kill PID` ile durdurabilirsin: diğer node'lar çalışmaya devam eder. Varsayılan geliştirme ayarlarında duran node yaklaşık 6 saniye sonra çevrimdışı görünür. Bu ortam Pi işletim sistemini veya radyo donanımını taklit etmez; aynı uygulama kodunun çoklu cihaz davranışını çalıştırır.
 
-Dummy Wi-Fi ve Bluetooth sinyalleri her taramada küçük rastgele değişimler ve ara sıra daha belirgin düşüşler üretir. RSSI −100 ile −25 dBm arasında kalır; örnek konum doğruluğu da hafifçe değişir. Cihaz kimlikleri ve `FirstSeen` sabit kaldığından sinyal grafiğini aynı cihaz üzerinde izleyebilirsin.
+Her dummy Pi başlangıçta **8 Wi-Fi ve 12 Bluetooth adresi** duyar. 3 Wi-Fi ve 5 Bluetooth adresi Pi'ler arasında ortaktır; üç Pi ile bina genelinde başlangıç sayısı **18 Wi-Fi ve 26 Bluetooth** olur. Yedinci taramadan itibaren her radyoya bir yeni yerel adres eklenir. Her 24 taramalık döngünün 12. ve 13. taramalarında bir yerel adres kısa süre görünmez, sonra geri gelir. Ortak adresler, açık/gizli ağlar, farklı Wi-Fi bantları ve Bluetooth türleri tekilleştirme ve durum davranışını denemeye yarar.
+
+Dummy sinyallerinde küçük rastgele değişimler ve ara sıra belirgin düşüşler vardır. RSSI −100 ile −25 dBm arasında kalır; örnek konum doğruluğu da hafifçe değişir. Kimlikler ve `FirstSeen` aynı süreç boyunca sabit kalır. `--nodes` Pi sayısını değiştirir; Pi başına cihaz profilleri [dummy.py](device_scanner/scanners/dummy.py) içindeki ortak/yerel listelerle belirlenir. Ölçümler ve konumlar örnektir; arayüz bunları **Demo** olarak işaretler.
 
 ## Süreçleri ayrı terminallerde çalıştır
 
@@ -52,14 +61,14 @@ Her terminalde proje klasörüne geç. Önce server:
 
 Her node'un kimliği farklı olmalı. Elle başlatılan server için çevrimdışı eşiği varsayılan 60 saniyedir; `--offline-after 10` ile değişir. Bu eşik heartbeat aralığından büyük olmalı.
 
-Server'ı kapatıp yeniden açabilirsin. Node'lar ağ hatasını bildirir ve sonraki güncel raporlarını göndermeyi sürdürür; eski raporları biriktirmez. Server yeniden başlayınca canlı liste yeni raporlarla oluşur.
+Server'ı kapatıp yeniden açabilirsin. Node'lar ağ hatasını bildirir ve sonraki güncel raporlarını göndermeyi sürdürür; eski raporları biriktirmez. Server yeniden başlayınca canlı liste ve geçici cihaz geçmişi yeni raporlarla oluşur. Dosyaya kaydedilen kat yerleşimleri korunur.
 
 ## Raspberry Pi'ye aktar
 
 Proje klasörünü Pi'ye kopyala. Örneğin proje klasöründen, `USER` ve `PI_IP` değerlerini değiştirerek:
 
 ```bash
-rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
+rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' --exclude='.device-scanner' \
   ./ USER@PI_IP:~/device-scanner/
 ```
 
@@ -103,10 +112,12 @@ Wi-Fi için `--radios wifi --wifi-interface wlan0` kullanılabilir. Wi-Fi tarama
 
 ## Küçük kod yapısı
 
-- `device_scanner/server.py`: rapor alıcısı ve bellekteki son durum.
+- `device_scanner/server.py`: rapor alıcısı, radyo tazeliği ve API.
+- `device_scanner/monitoring.py`: sunucu oturumundaki sınırlı gözlem/kimlik geçmişi.
+- `device_scanner/placements.py`: paylaşılan kat yerleşimlerini atomik olarak kaydetme.
 - `device_scanner/static/index.html`: pano sayfasının yapısı.
-- `device_scanner/static/styles.css`: görünüm, açık/koyu tema ve mobil düzen.
-- `device_scanner/static/js/`: API, filtreleme, Pi listesi, sonuçlar, ayrıntılar ve grafikler için küçük JavaScript modülleri.
+- `device_scanner/static/styles.css`: masaüstü yerleşimi, açık/koyu tema ve dar pencere düzeni.
+- `device_scanner/static/js/`: saf cihaz birleştirme (`entities.js`), genel bakış (`overview.js`), cihaz listesi/ayrıntısı (`devices.js`), sensör yönetimi ve teknik analiz için küçük modüller.
 - `device_scanner/node.py`: heartbeat, tarama döngüleri ve HTTP gönderimi.
 - `device_scanner/wigle.py`: ortak WiGLE alanları, doğrulama ve gerçek donanım verisi dönüşümü.
 - `device_scanner/scanners/`: dummy ve gerçek tarayıcılar.
@@ -114,7 +125,7 @@ Wi-Fi için `--radios wifi --wifi-interface wlan0` kullanılabilir. Wi-Fi tarama
 
 Gerçek Bluetooth/Wi-Fi sürücüleri mevcut `bakici-app` projesindeki tarayıcılardan alınmıştır; bu proje eski klasöre import veya dosya yolu ile bağlı değildir. Geliştirme ve Pi aynı node döngüsünü kullanır, yalnız tarayıcı seçimi ve sunucu adresi değişir.
 
-API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`. Arayüz görünürken iki saniyede, arka planda on saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama süresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz.
+API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`, `GET/POST /api/placements`. Arayüz görünürken iki saniyede, arka planda on saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama penceresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz. Heartbeat, etkin radyoları ve beklenen çevrimi (`interval + timeout`) bildirir.
 
 ## Ortak WiGLE veri biçimi
 
@@ -124,17 +135,49 @@ Her iki radyoda sinyal dBm'dir; Wi-Fi yüzdesi dBm'e çevrilmez. Gerçek Wi-Fi R
 
 Bu değişiklikten sonra server ve tüm node'ları birlikte güncelleyip yeniden başlat; ardından tarayıcıyı yenile. Alan açıklamaları, örnek rapor ve donanım sınırlamaları: [WiGLE data format](docs/wigle.md).
 
-## Yeni analiz panosu
+## Arayüzü kullan
 
-Pano, `bakici-app` Pi seçimi/ayrıntı düzeninden ve [Acrylic Wi-Fi Analyzer](https://www.acrylicwifi.com/en/wifi-analyzer/) uygulamasının tablo, sinyal ve kanal görünümlerinden esinlenir. İngilizce arayüz; Pi seçimi, Bluetooth/Wi-Fi geçişi, ad/adres araması, Wi-Fi bant filtresi, sıralama, JSON/CSV dışa aktarma ve açık/koyu tema sunar. Bir satır seçildiğinde WiGLE kaydının tamamı incelenebilir. CSV dosyası WiGLE v1.6 biçimindedir; JSON ayrıca Pi, filtre ve durum bilgisini saklar.
+Türkçe arayüz dört görünümden oluşur:
 
-**Bina yerleşimi** bölümünde üç katlı bina görünür. Başlangıçta `pi-01` 1. katta, `pi-02` 2. katta, `pi-03` 3. kattadır; `pi-1` gibi isimler de tanınır. Binadaki bir Pi'ye tıklayınca sonuçlar o cihaza göre filtrelenir. **Bulunduğu kat** menüsünden Pi'yi taşıyabilirsin; bir katta birden fazla Pi olabilir. Ek cihazlar **Yerleştirilmemiş Pi'ler** alanında görünür. Kat seçimleri bu tarayıcıda, aynı sunucu adresi için kaydedilir; başka bilgisayarlarla paylaşılmaz. WiGLE tarama kayıtlarına kat bilgisi eklenmez.
+| Görünüm | Ne için kullanılır? |
+| --- | --- |
+| **Genel bakış** | Sabit bina toplamları, yeni kayıtlar, gözlem durumu, kısa kat özeti ve cihaz listesinin ilk satırları. |
+| **Cihazlar** | Ad/adres araması, tür/kat/durum filtreleri, tam tekil liste ve bir cihazı gören kaynaklar. |
+| **Sensörler** | Pi bağlantıları, her radyonun son başarılı taraması/hataları, büyük bina ve kat ataması. |
+| **Analiz** | Pi/radyo başına gözlemler, bant filtresi, sıralama, kaynak sinyal geçmişi, dağılım grafikleri ve JSON/WiGLE CSV kaydetme. |
 
-Sinyal grafiği yalnız tarayıcı açıkken gelen yeni raporlardan oluşur; son 60 ölçümü tutar. Kanal grafiği filtrelenen güncel başarılı sonuçlarda aynı BSSID'yi kanal/bant başına bir kez sayar; kanal doluluk oranı veya parazit ölçmez. Tablo her Pi'nin gözlemini ayrı tutar. Hatalı/çevrimdışı Pi'lerin önceki verileri işaretlenir; sunucu kesilirse son görünüm eski olarak gösterilir.
+Genel bakışın Wi-Fi, Bluetooth ve **Yeni · son 10 dk** sayaçları bina genelini anlatır; liste filtresiyle değişmez. Aynı adresi üç Pi görürse cihaz listesinde bir satır, ayrıntıda üç kaynak vardır. Aynı adlı farklı adresler ayrı kalır. Bluetooth BT/BLE aynı adres için tekilleştirilir; Wi-Fi ayrı radyo ailesidir. Sayılar adres bazındadır: kişi, kesin fiziksel cihaz veya bağlı Wi-Fi istemci sayısı değildir.
 
-HTML/CSS/JavaScript doğrudan Python sunucusundan sunulur. Uygulamayı çalıştırmak için Node.js, npm kurulumu veya derleme gerekmez. Kodun iş bölümü ve kullanım ayrıntıları: [Frontend guide](docs/frontend.md).
+**Gözlenen kat**, yayını duyan sensörün katıdır. Bir kayıt birden fazla katta görülebilir; kat sayıları örtüşür ve toplanarak bina toplamı bulunmaz. En güçlü RSSI cihazı kesin bir kata yerleştirmez. Sinyal değeri uzaklık veya ölçülmüş bağlantı kalitesi değildir.
 
-Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. Tarama sonuçları sunucu belleğindedir; kat yerleşimi tarayıcıda saklanır. DHCP, kalıcı tarama kaydı ve otomatik servis kurulumu bu ilk adımın kapsamına dahil değildir.
+Bir kayıt seçildiğinde kaynak Pi'ler, kendi RSSI değerleri ve son görülmeleri sağ panelde açılır. Sinyal grafiği seçilen kaynağın bu tarayıcı oturumundaki son 60 ölçümüdür; farklı Pi okumaları tek çizgiye karıştırılmaz. Teknik WiGLE kaydı isteğe bağlı açılır. Kanal grafiği kanal/bant başına farklı BSSID sayısını gösterir; kanal doluluğunu veya paraziti ölçmez.
+
+Analiz dışa aktarması kaynak gözlemlerini korur. CSV WiGLE v1.6'nın metadata satırı ve 14 sütunuyla kaydedilir; JSON ayrıca Pi, filtre, zaman ve durum bilgisini taşır. Tekil cihaz sayısı ile kaynak gözlemi sayısı farklı olabilir.
+
+### Gözlem durumları ve kısa dönem geçmiş
+
+Sunucu bağlantısı, Pi heartbeat'i ve radyo tazeliği ayrı izlenir. Son başarılı tarama yaşı `max(30 sn, 2 × beklenen çevrim)` sınırına ulaşınca radyo eski sayılır. Hata veya yeni heartbeat eski ölçümü güncel yapmaz. Bilerek kapalı radyo ayrı gösterilir.
+
+- **Görüldü:** en az bir taze ve çalışan kaynakta son taramada var.
+- **Az önce görüldü:** taze kaynak son taramada göremedi, ancak son görülmeden en fazla 60 saniye geçti. Kısa kesintilerde sayılmaya devam eder.
+- **Artık görülmüyor:** çalışan kaynakların en az iki başarılı taramasında yok ve `max(60 sn, 3 × beklenen çevrim)` geçti.
+- **Durum bilinmiyor:** gözlem kaynağı eksik veya görülmeme için yeterli kanıt yok. Pi kesintisi cihazın kapandığı şeklinde yorumlanmaz.
+
+Güncel gözlemi olmayan kat veya radyo **—** gösterir. Taze ve boş ilk tarama **0** olabilir; önceki kayıtlar varsa 60 saniyelik tolerans uygulanır. Bir kattaki bazı kaynaklar kesilirse sayı **kısmi gözlem** olarak işaretlenir.
+
+Her Pi/radyonun ilk başarılı taraması başlangıç kabul edilir. Sonraki taramalarda ilk kez görülen ortak adres **10 dakika yeni** sayılır. Sayfayı yenilemek yeni kayıt dalgası oluşturmaz. Kaynak gözlemleri son görülmelerinden itibaren **15 dakika**, bütün kaynaklar için en fazla **10.000 kayıt** olarak sunucu belleğinde tutulur. Sunucu oturumunda yeniden görülmeyi tanımak için ayrıca en fazla 10.000 kimlik korunur. Kapasite aşılırsa eski kimlikler unutulabilir. Sunucu yeniden başlatıldığında bu geçici geçmiş yeni bir izleme dönemiyle başlar; kalıcı cihaz tarihçesi yoktur.
+
+### Paylaşılan kat yerleşimi
+
+**Sensörler** görünümünde `pi-01`, `pi-02`, `pi-03` varsayılan olarak 1., 2., 3. kattadır; `pi-1` gibi adlar da tanınır. Bir Pi seçip **Bulunduğu kat** menüsünden taşıyabilirsin. Bir katta birden çok Pi bulunabilir. Diğer kimlikler atanmamış başlar; atanmamış sensörün gözlemleri genel listede kalır.
+
+Atamalar `.device-scanner/placements.json` dosyasında sunucu tarafından atomik olarak kaydedilir, diğer tarayıcılarla paylaşılır ve sunucu yeniden başlatıldığında korunur. Açıkça “Yerleştirilmemiş” seçmek varsayılan katı da kaldırır. Dosya yolu `server` veya `dev` komutunda `--placements-file PATH` ile değişir. WiGLE tarama kayıtlarına kat alanı eklenmez.
+
+Kat yerleşimleri artık ortak sunucu dosyasındadır. Önceki sürümün tarayıcıya özel kat seçimleri otomatik aktarılmaz; gerekiyorsa Sensörler ekranında bir kez yeniden seçilir.
+
+HTML/CSS/JavaScript doğrudan Python sunucusundan sunulur. Çalıştırmak için Node.js, npm kurulumu veya derleme gerekmez. Arayüz dosyaları sunucu başlarken okunur; değişiklikten sonra sunucuyu yeniden başlatıp sayfayı yenile. Tasarım kararları: [Birleşik one-shot planı](one-shot-vision-astra.md). Kodun iş bölümü: [Frontend guide](docs/frontend.md).
+
+Bu sürüm geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. DHCP, kalıcı tarama veritabanı ve otomatik servis kurulumu kapsam dışıdır.
 
 ## Test
 
@@ -151,4 +194,4 @@ node --test tests/frontend/*.test.js
 node tools/check_browser.mjs
 ```
 
-Tarayıcı kontrolü kurulu Chrome kullanır; gerekirse `CHROME_BIN=/path/to/chromium` ve `PYTHON=/path/to/python` belirt. Geçici sunucular ve sentetik raporlar oluşturur, test sonunda kapatır. Masaüstü, koyu tema ve mobil ekran görüntülerini `/tmp/device-scanner-{desktop,dark,mobile}.png` konumuna kaydeder.
+Tarayıcı kontrolü kurulu Chrome kullanır; gerekirse `CHROME_BIN=/path/to/chromium` ve `PYTHON=/path/to/python` belirt. Geçici sunucular ve sentetik raporlar oluşturur, test sonunda kapatır. Üç masaüstü boyutunda ilk ekranı kontrol eder; genel bakış, koyu tema, ayrıntı, sensörler ve analiz görüntülerini `/tmp/device-scanner-oneshot-{overview,dark,drawer,sensors,analysis}.png` konumuna kaydeder.

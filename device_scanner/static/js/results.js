@@ -1,4 +1,4 @@
-import { $, element, icon, setText } from "./ui.js";
+import { $, element, icon, setText, observationStateText } from "./ui.js";
 import { signalText, signalPercent } from "./observations.js";
 
 function createRow(row) {
@@ -33,14 +33,14 @@ export function renderResults(rows, view, context) {
   const wifi = view.radio === "wifi";
   setText(
     $("results-name"),
-    wifi ? "Nearby access points" : "Nearby Bluetooth devices",
+    wifi ? "Wi-Fi kaynak gözlemleri" : "Bluetooth kaynak gözlemleri",
   );
   $("result-count").textContent = rows.length;
-  $("name-column").textContent = wifi ? "NETWORK / BSSID" : "DEVICE / ADDRESS";
-  $("channel-column").textContent = wifi ? "CHANNEL" : "TYPE";
-  $("security-column").textContent = wifi ? "SECURITY" : "CAPABILITIES";
+  $("name-column").textContent = wifi ? "AĞ / BSSID" : "CİHAZ / ADRES";
+  $("channel-column").textContent = wifi ? "KANAL" : "TÜR";
+  $("security-column").textContent = wifi ? "GÜVENLİK" : "ÖZELLİKLER";
   $("scope-caption").textContent =
-    `${view.nodeId === "all" ? "All scanners" : view.nodeId} · one observation per Pi`;
+    `${view.nodeId === "all" ? "Tüm sensörler" : view.nodeId} · her Pi'nin ölçümü ayrı gösterilir`;
   const body = $("results");
   const existing = new Map(
     [...body.children].map((row) => [row.dataset.key, row]),
@@ -72,12 +72,12 @@ export function renderResults(rows, view, context) {
     setText(
       tr.children[4].querySelector(".cell-secondary"),
       !context.connected
-        ? "Outdated view"
+        ? "Sunucuya ulaşılamıyor"
         : row.state === "latest"
           ? row.scanner === "dummy"
-            ? "Dummy"
-            : "Real Pi"
-          : `Previous · ${row.state}`,
+            ? "Demo"
+            : "Gerçek Pi"
+          : `Önceki · ${observationStateText(row.state)}`,
     );
     tr.classList.toggle("selected", row.id === view.selectedId);
     tr.classList.toggle(
@@ -94,22 +94,22 @@ export function renderResults(rows, view, context) {
   const problem = context.nodes.find((node) => node.node_id === view.nodeId)
     ?.radios[view.radio];
   $("empty-title").textContent = filtered
-    ? "No matching observations"
+    ? "Eşleşen gözlem yok"
     : !context.nodes.length
-      ? "Listening for your scanners"
+      ? "Sensörler bekleniyor"
       : problem?.status === "error"
-        ? "This radio needs attention"
+        ? "Bu radyo tarama yapamıyor"
         : problem?.status === "success"
-          ? "Nothing found in the last scan"
-          : "Waiting for scan results";
+          ? "Son taramada kayıt görülmedi"
+          : "Tarama sonuçları bekleniyor";
   $("empty-description").textContent = filtered
-    ? "Try another name or address, or clear the filters."
+    ? "Başka bir ad veya adres deneyin ya da filtreleri temizleyin."
     : problem?.status === "error"
       ? problem.error
       : problem?.status === "success"
-        ? "The scan completed successfully with zero observations. New reports appear automatically."
-        : "Results appear here when a Pi sends a scan. Scanners run independently.";
+        ? "Tarama başarıyla tamamlandı; kayıt bulunamadı. Yeni gözlemler otomatik görünür."
+        : "Pi'ler tarama gönderdiğinde gözlemler burada görünür. Her sensör bağımsız çalışır.";
   const previous = rows.filter((row) => row.state !== "latest").length;
   $("results-summary").textContent =
-    `${rows.length} of ${context.total} observations${previous ? ` · ${previous} previous` : ""}${!context.connected ? " · outdated" : ""}`;
+    `${context.total} gözlemden ${rows.length} gösteriliyor${previous ? ` · ${previous} önceki gözlem` : ""}${!context.connected ? " · sunucuya ulaşılamıyor" : ""}`;
 }

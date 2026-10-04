@@ -1,15 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  FLOORS,
   floorFor,
   floorLabel,
-  loadPlacements,
-  savePlacements,
-  PLACEMENT_KEY,
 } from "../../device_scanner/static/js/placement.js";
 
-test("initial placement recognizes the first three Pis and leaves additional devices unplaced", () => {
+test("fallback placement recognizes the first three Pis and leaves other devices unplaced", () => {
   const placements = new Map();
+  assert.deepEqual(FLOORS, [3, 2, 1]);
   for (const id of ["pi-1", "pi-01", "Pi-001"])
     assert.equal(floorFor(id, placements), 1);
   assert.equal(floorFor("pi-02", placements), 2);
@@ -20,68 +19,15 @@ test("initial placement recognizes the first three Pis and leaves additional dev
   assert.equal(floorLabel(null), "Kat seçilmedi");
 });
 
-test("multiple Pis can share a floor and explicit unplacement overrides defaults across reloads", () => {
-  const values = new Map();
-  const storage = {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => values.set(key, value),
-  };
+test("server assignments allow several Pis per floor and explicit unplacement overrides defaults", () => {
   const placements = new Map([
     ["pi-01", 3],
     ["pi-02", 3],
     ["pi-03", null],
     ["pi-04", 1],
   ]);
-  assert.equal(savePlacements(placements, storage), true);
-  const restored = loadPlacements(storage);
-  assert.deepEqual(restored, placements);
-  assert.equal(floorFor("pi-01", restored), 3);
-  assert.equal(floorFor("pi-02", restored), 3);
-  assert.equal(floorFor("pi-03", restored), null);
-  assert.ok(values.has(PLACEMENT_KEY));
-});
-
-test("corrupt or unsupported saved placements cannot break monitoring or create nonexistent floors", () => {
-  for (const raw of [
-    null,
-    "{",
-    "null",
-    "[]",
-    "{}",
-    '{"version":2,"floors":{"pi-01":2}}',
-    '{"version":1,"floors":[]}',
-  ])
-    assert.deepEqual(loadPlacements({ getItem: () => raw }), new Map());
-  const saved = JSON.stringify({
-    version: 1,
-    floors: {
-      "pi-01": 4,
-      "pi-02": "1",
-      "pi-03": false,
-      "pi-04": null,
-      "pi-05": 2,
-    },
-  });
-  assert.deepEqual(
-    loadPlacements({ getItem: () => saved }),
-    new Map([
-      ["pi-04", null],
-      ["pi-05", 2],
-    ]),
-  );
-});
-
-test("blocked storage still allows placement in the current session", () => {
-  const storage = {
-    getItem() {
-      throw new Error("blocked");
-    },
-    setItem() {
-      throw new Error("blocked");
-    },
-  };
-  assert.deepEqual(loadPlacements(storage), new Map());
-  const placements = new Map([["pi-01", 2]]);
-  assert.equal(savePlacements(placements, storage), false);
-  assert.equal(floorFor("pi-01", placements), 2);
+  assert.equal(floorFor("pi-01", placements), 3);
+  assert.equal(floorFor("pi-02", placements), 3);
+  assert.equal(floorFor("pi-03", placements), null);
+  assert.equal(floorFor("pi-04", placements), 1);
 });

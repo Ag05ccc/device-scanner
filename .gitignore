@@ -5,3 +5,5 @@ __pycache__/
 *.local.json
 *.log
 .DS_Store
+
+.device-scanner/

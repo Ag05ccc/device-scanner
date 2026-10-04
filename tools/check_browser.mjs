@@ -166,14 +166,18 @@ async function text(session, selector) {
   );
 }
 // Like until(), but tolerates evaluation errors while a navigation replaces the page.
-async function untilPage(session, expression, message) {
-  await until(async () => {
-    try {
-      return await evaluate(session, expression);
-    } catch {
-      return false;
-    }
-  }, message);
+async function untilPage(session, expression, message, timeout = 12000) {
+  await until(
+    async () => {
+      try {
+        return await evaluate(session, expression);
+      } catch {
+        return false;
+      }
+    },
+    message,
+    timeout,
+  );
 }
 async function setSearch(session, value) {
   await evaluate(
@@ -221,11 +225,33 @@ async function screenshot(session, filename) {
   await writeFile(filename, Buffer.from(result.data, "base64"));
 }
 
+async function setField(session, id, value) {
+  await evaluate(
+    session,
+    `(() => {
+    const input = document.getElementById(${JSON.stringify(id)});
+    input.value = ${JSON.stringify(value)};
+    input.dispatchEvent(new Event(input.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
+  })()`,
+  );
+}
+async function activeTab(session, tab) {
+  await click(session, `[data-tab="${tab}"]`);
+}
+const rowCount = (session) =>
+  evaluate(session, "document.querySelectorAll('#device-rows tr').length");
+const selectedSource = (session) =>
+  evaluate(
+    session,
+    "document.querySelector('#device-sources [aria-pressed=true]')?.dataset.sourceId",
+  );
+
 let heartbeatTimer;
 let fixtureFailure;
 try {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
+  const placementsFile = path.join(temporary, "placements.json");
   const server = child(process.env.PYTHON || "python3", [
     "-m",
     "device_scanner",
@@ -234,6 +260,8 @@ try {
     String(port),
     "--offline-after",
     "5",
+    "--placements-file",
+    placementsFile,
   ]);
   await waitServer(server, base + "/api/health");
   chrome = child(
@@ -257,46 +285,48 @@ try {
     targetId,
     flatten: true,
   });
-  await cdp("Runtime.enable", {}, session);
-  await cdp("Network.enable", {}, session);
-  await cdp("Page.enable", {}, session);
+  for (const domain of ["Runtime", "Network", "Page"])
+    await cdp(`${domain}.enable`, {}, session);
   await cdp("Browser.setDownloadBehavior", {
     behavior: "allow",
     downloadPath: temporary,
   });
-  await cdp(
-    "Emulation.setDeviceMetricsOverride",
-    { width: 1536, height: 1050, deviceScaleFactor: 1, mobile: false },
-    session,
-  );
+  const viewport = (width, height) =>
+    cdp(
+      "Emulation.setDeviceMetricsOverride",
+      {
+        width,
+        height,
+        deviceScaleFactor: 1,
+        mobile: false,
+      },
+      session,
+    );
+  await viewport(1440, 900);
   await cdp("Page.navigate", { url: base }, session);
   await untilPage(
     session,
-    "document.getElementById('connection-text')?.textContent === 'Server connected'",
+    "document.getElementById('connection-text')?.textContent === 'Canlı veri'",
     "initial connection",
   );
-  assert.equal(await text(session, "#online-value"), "0");
+  assert.equal(await text(session, "#summary-wifi"), "—");
+  assert.equal(await text(session, "#summary-bluetooth"), "—");
+  assert.equal(await rowCount(session), 0);
   assert.equal(
-    await text(session, "#empty-title"),
-    "Listening for your scanners",
-  );
-  pass("Empty server renders a useful waiting state");
-  assert.equal(
-    await evaluate(
-      session,
-      "document.querySelectorAll('.building-floor').length",
-    ),
-    3,
+    await evaluate(session, "document.getElementById('view-sensors').hidden"),
+    true,
   );
   assert.equal(
-    await evaluate(
-      session,
-      "document.querySelectorAll('.floor-empty:not([hidden])').length",
-    ),
-    3,
+    await evaluate(session, "document.getElementById('device-drawer').open"),
+    false,
+  );
+  pass(
+    "Empty server shows unknown counts and waiting state; setup and details stay secondary",
   );
 
   const paused = new Set();
+  const blockedRadios = new Set();
+  const fixtures = new Map();
   const post = async (nodeId, report) => {
     const response = await fetch(base + "/api/reports", {
       method: "POST",
@@ -305,9 +335,34 @@ try {
     });
     assert.equal(response.status, 200, await response.text());
   };
+  const heartbeat = (nodeId) =>
+    post(nodeId, {
+      kind: "heartbeat",
+      enabled_radios: ["wifi", "bluetooth"],
+      expected_cycle_seconds: { wifi: 2, bluetooth: 2 },
+    });
+  const reportScan = (nodeId, radio, observations) =>
+    post(nodeId, {
+      kind: "scan",
+      radio,
+      status: "success",
+      observed_at: new Date().toISOString(),
+      observations,
+    });
+  const sendScan = async (nodeId, radio, observations) => {
+    if (!fixtures.has(nodeId)) fixtures.set(nodeId, {});
+    fixtures.get(nodeId)[radio] = observations;
+    blockedRadios.delete(`${nodeId}:${radio}`);
+    await reportScan(nodeId, radio, observations);
+  };
+  const refresh = async () => {
+    await click(session, "#refresh");
+    await sleep(150);
+  };
+  const snapshot = async () => (await fetch(base + "/api/nodes")).json();
   const wifi = (index) => [
     record({
-      SSID: "Studio Network",
+      SSID: "Ofis Ağı",
       MAC: "02:A4:32:80:11:01",
       RSSI: -30 - index * 8,
       Frequency: 5180,
@@ -315,15 +370,15 @@ try {
       AuthMode: "[WPA2-PSK-CCMP][ESS]",
     }),
     record({
-      SSID: "Studio Guest",
+      SSID: `Misafir ${index}`,
       MAC: `02:A4:32:80:12:0${index}`,
       RSSI: -55 - index * 5,
       Frequency: 2437,
       Channel: 6,
-      AuthMode: "[WPA2-PSK-CCMP][ESS]",
+      AuthMode: "[ESS]",
     }),
     record({
-      SSID: "Lab · 6 GHz",
+      SSID: `Laboratuvar ${index}`,
       MAC: `02:A4:32:80:13:0${index}`,
       RSSI: -65 - index * 3,
       Frequency: 5955,
@@ -336,147 +391,328 @@ try {
       RSSI: -90 + index,
       Frequency: 2462,
       Channel: 11,
-      AuthMode: "[ESS]",
+      AuthMode: "[WPA2-PSK-CCMP][ESS]",
     }),
   ];
-  const sendScan = (nodeId, radio, observations) =>
-    post(nodeId, {
-      kind: "scan",
-      radio,
-      status: "success",
-      observed_at: new Date().toISOString(),
-      observations,
-    });
-  for (let i = 1; i <= 3; i++) {
-    await sendScan(`pi-0${i}`, "wifi", wifi(i));
-    await sendScan(`pi-0${i}`, "bluetooth", [
-      record({
-        SSID: `Room ${i} beacon`,
-        MAC: `02:BB:CC:DD:EE:0${i}`,
-        RSSI: -40 - i * 10,
-        Type: "BLE",
-        Channel: 0,
-        Frequency: 7936,
-        AuthMode: "Misc [BLE]",
-        MfgrId: 72,
-      }),
-    ]);
-  }
-  heartbeatTimer = setInterval(async () => {
-    try {
-      for (let i = 1; i <= 3; i++)
-        if (!paused.has(i)) await post(`pi-0${i}`, { kind: "heartbeat" });
-    } catch (error) {
-      fixtureFailure = error;
-    }
-  }, 500);
-  await click(session, "#refresh");
+  const bluetooth = (index) => [
+    record({
+      SSID: "Ortak işaretçi",
+      MAC: "02:BB:CC:DD:EE:00",
+      RSSI: -40 - index * 8,
+      Type: index === 1 ? "BT" : "BLE",
+      Channel: 0,
+      Frequency: 7936,
+      AuthMode: `Misc [${index === 1 ? "BT" : "BLE"}]`,
+      MfgrId: 72,
+    }),
+    record({
+      SSID: `Kulaklık ${index}`,
+      MAC: `02:BB:CC:DD:EE:0${index}`,
+      RSSI: -50 - index * 6,
+      Type: "BLE",
+      Channel: 0,
+      Frequency: 7936,
+      AuthMode: "audio-headset [BLE]",
+      MfgrId: 72,
+    }),
+  ];
+  await heartbeat("pi-01");
+  await sendScan("pi-01", "wifi", []);
+  await sendScan("pi-01", "bluetooth", []);
+  await refresh();
   await untilPage(
     session,
-    "document.querySelectorAll('#results tr').length === 12",
-    "twelve Wi-Fi observations",
+    "document.getElementById('summary-wifi').textContent === '0' && document.getElementById('summary-bluetooth').textContent === '0'",
+    "successful empty scan counts",
   );
-  assert.equal(await text(session, "#online-value"), "3");
-  assert.equal(await text(session, "#observations-value"), "12");
+  assert.match(await text(session, "#devices-empty-title"), /görül|bulun/i);
+  assert.equal(
+    await text(session, '#floor-summaries [data-floor="1"] .wifi-value'),
+    "0 Wi-Fi",
+  );
+  assert.equal(
+    await text(session, '#floor-summaries [data-floor="2"] .wifi-value'),
+    "— Wi-Fi",
+  );
+  pass(
+    "Successful empty scans show zero, distinct from an unobserved building",
+  );
+
+  for (let index = 1; index <= 3; index++) {
+    const nodeId = `pi-0${index}`;
+    await heartbeat(nodeId);
+    await sendScan(nodeId, "wifi", wifi(index));
+    await sendScan(nodeId, "bluetooth", bluetooth(index));
+  }
+  let fixtureBusy = false;
+  let lastScans = Date.now();
+  heartbeatTimer = setInterval(async () => {
+    if (fixtureBusy) return;
+    fixtureBusy = true;
+    try {
+      const scanNow = Date.now() - lastScans >= 2000;
+      if (scanNow) lastScans = Date.now();
+      for (const [nodeId, radios] of fixtures) {
+        if (paused.has(nodeId)) continue;
+        await heartbeat(nodeId);
+        if (scanNow)
+          for (const [radio, records] of Object.entries(radios))
+            if (!blockedRadios.has(`${nodeId}:${radio}`))
+              await reportScan(nodeId, radio, records);
+      }
+    } catch (error) {
+      fixtureFailure = error;
+    } finally {
+      fixtureBusy = false;
+    }
+  }, 500);
+  await refresh();
+  await untilPage(
+    session,
+    "document.querySelectorAll('#device-rows tr').length === 14",
+    "14 grouped devices",
+  );
+  assert.equal(await text(session, "#summary-wifi"), "10");
+  assert.equal(await text(session, "#summary-bluetooth"), "4");
+  assert.match(await text(session, "#coverage-value"), /3\s*\/\s*3/);
+  assert.equal(
+    await evaluate(session, "document.getElementById('demo-banner').hidden"),
+    false,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#floor-summaries button[data-floor]').length >= 3",
+    ),
+    true,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "/pi-0[123]/.test(document.getElementById('view-observations').innerText)",
+    ),
+    false,
+  );
+  pass(
+    "Overview deduplicates three-Pi Wi-Fi and BT/BLE readings; demo data is explicit",
+  );
+
+  for (const [width, height] of [
+    [1366, 650],
+    [1440, 900],
+    [1920, 1080],
+  ]) {
+    await viewport(width, height);
+    await evaluate(session, "window.scrollTo(0,0)");
+    const bounds = await evaluate(
+      session,
+      `(() => {
+      const selectors = ['#environment-status','#overview-summary','#floor-overview','#device-rows tr:nth-child(5)'];
+      return selectors.map(selector => { const r=document.querySelector(selector).getBoundingClientRect(); return {selector,bottom:r.bottom,top:r.top,height:innerHeight}; });
+      })()`,
+    );
+    if (bounds.some((item) => item.top < 0 || item.bottom > height)) {
+      console.log(
+        await evaluate(
+          session,
+          `Array.from(document.querySelectorAll('.workspace-heading,#demo-banner,#environment-status,.environment-metrics,.observation-layout,#floor-overview,#floor-summaries button,#device-rows tr:nth-child(5)')).map(element=>({element:element.id||element.className,...JSON.parse(JSON.stringify(element.getBoundingClientRect()))}))`,
+        ),
+      );
+      await screenshot(
+        session,
+        "/tmp/device-scanner-oneshot-layout-failure.png",
+      );
+    }
+    for (const item of bounds)
+      assert.ok(
+        item.top >= 0 && item.bottom <= height,
+        `${width}x${height}: ${item.selector} bottom ${item.bottom}`,
+      );
+    assert.equal(
+      await evaluate(
+        session,
+        "document.documentElement.scrollWidth <= innerWidth",
+      ),
+      true,
+    );
+  }
+  await viewport(1440, 900);
+  await screenshot(session, "/tmp/device-scanner-oneshot-overview.png");
+  await click(session, "#theme");
+  assert.equal(
+    await evaluate(session, "document.documentElement.dataset.theme"),
+    "dark",
+  );
+  await screenshot(session, "/tmp/device-scanner-oneshot-dark.png");
+  await cdp("Page.reload", {}, session);
+  await untilPage(
+    session,
+    "document.querySelectorAll('#device-rows tr').length === 14",
+    "theme reload",
+  );
+  assert.equal(
+    await evaluate(session, "document.documentElement.dataset.theme"),
+    "dark",
+  );
+  await click(session, "#theme");
+  pass(
+    "Three desktop sizes expose status, counters, all floors and five rows immediately; theme persists",
+  );
+
+  await setField(session, "device-radio", "wifi");
+  assert.equal(await rowCount(session), 10);
+  await click(session, '#floor-summaries button[data-floor="1"]');
+  assert.equal(await rowCount(session), 4);
+  await setField(session, "device-search", " misafir ");
+  assert.equal(await rowCount(session), 1);
+  assert.equal(await text(session, "#summary-wifi"), "10");
+  assert.equal(await text(session, "#summary-bluetooth"), "4");
+  await setField(session, "device-search", "nothing-matches");
+  assert.equal(await rowCount(session), 0);
+  assert.equal(
+    await evaluate(
+      session,
+      "document.getElementById('device-clear-filters').hidden",
+    ),
+    false,
+  );
+  await click(session, "#device-clear-filters");
+  assert.equal(await rowCount(session), 14);
+  await key(session, "2", "Digit2", 50, "2");
+  assert.equal(
+    await evaluate(session, "document.getElementById('device-floor').value"),
+    "2",
+  );
+  assert.equal(await rowCount(session), 6);
+  await click(session, "#reset-floor");
+  await key(session, "/", "Slash", 191, "/");
+  assert.equal(
+    await evaluate(session, "document.activeElement.id"),
+    "device-search",
+  );
+  pass(
+    "Device filters compose and clear without changing the building counters",
+  );
+
+  const order = await evaluate(
+    session,
+    "Array.from(document.querySelectorAll('#device-rows tr')).map(row=>row.dataset.key)",
+  );
+  await evaluate(
+    session,
+    "document.querySelector('#device-rows tr:nth-child(3) button').focus()",
+  );
+  const focused = await evaluate(
+    session,
+    "document.activeElement.closest('tr').dataset.key",
+  );
+  const changed = wifi(1);
+  changed[0].RSSI = -95;
+  await sendScan("pi-01", "wifi", changed);
+  await sleep(2300);
+  assert.deepEqual(
+    await evaluate(
+      session,
+      "Array.from(document.querySelectorAll('#device-rows tr')).map(row=>row.dataset.key)",
+    ),
+    order,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.activeElement.closest('tr')?.dataset.key",
+    ),
+    focused,
+  );
+  await setField(session, "device-search", "Ofis Ağı");
+  await click(session, "#device-rows tr:first-child button");
+  assert.equal(
+    await evaluate(session, "document.getElementById('device-drawer').open"),
+    true,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#device-sources [data-source-id]').length",
+    ),
+    3,
+  );
+  await click(session, "#device-sources button:nth-child(2)");
+  const sourceId = await selectedSource(session);
+  assert.ok(sourceId);
+  const sourceNode = JSON.parse(sourceId)[0];
+  const next = wifi(1);
+  next[0].RSSI = -25;
+  await sendScan("pi-01", "wifi", next);
+  await sleep(2300);
+  assert.equal(await selectedSource(session), sourceId);
+  assert.match(
+    await text(session, "#device-history-key"),
+    new RegExp(sourceNode),
+  );
+  const drawerRecord = JSON.parse(await text(session, "#device-raw"));
+  assert.deepEqual(Object.keys(drawerRecord), WIGLE_COLUMNS);
+  assert.equal(drawerRecord.RSSI, fixtures.get(sourceNode).wifi[0].RSSI);
+  assert.ok(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#device-history-chart .chart-point').length >= 1",
+    ),
+  );
+  await screenshot(session, "/tmp/device-scanner-oneshot-drawer.png");
+  await key(session, "Escape", "Escape", 27);
+  assert.equal(
+    await evaluate(session, "document.getElementById('device-drawer').open"),
+    false,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.activeElement.closest('tr')?.dataset.key",
+    ),
+    JSON.stringify(["wifi", "02:A4:32:80:11:01"]),
+  );
+  assert.equal(
+    await evaluate(session, "document.getElementById('device-search').value"),
+    "Ofis Ağı",
+  );
+  await click(session, "#device-rows tr:first-child button");
+  await click(session, "#device-sources button:nth-child(2)");
+  const analyzedSource = JSON.parse(await selectedSource(session))[0];
+  await click(session, "#device-open-analysis");
+  assert.equal(
+    await evaluate(session, "document.getElementById('view-analysis').hidden"),
+    false,
+  );
+  assert.equal(
+    await evaluate(session, "document.getElementById('analysis-node').value"),
+    analyzedSource,
+  );
+  pass(
+    "Live updates preserve row order and focus; drawer keeps per-Pi history and restores keyboard context",
+  );
+
+  await setField(session, "analysis-node", "all");
+  await setSearch(session, "");
+  await setField(session, "band", "5");
+  assert.equal(
+    await evaluate(session, "document.querySelectorAll('#results tr').length"),
+    3,
+  );
   assert.equal(
     await evaluate(
       session,
       "document.querySelectorAll('#distribution-chart .chart-bar').length",
     ),
-    4,
-  );
-  assert.match(
-    await text(session, "#distribution-chart title"),
-    /Ch 36 \(5 GHz\): 1/,
-  );
-  pass("All three Pis report; channel chart deduplicates shared BSSIDs");
-
-  for (let floor = 1; floor <= 3; floor++) {
-    assert.equal(
-      await evaluate(
-        session,
-        `document.querySelector('#floor-nodes-${floor} .building-node').dataset.nodeId`,
-      ),
-      `pi-0${floor}`,
-    );
-  }
-  await click(session, '#building .building-node[data-node-id="pi-02"]');
-  assert.equal(await text(session, "#placement-location"), "2. kat");
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
-    4,
-  );
-  assert.equal(
-    await evaluate(
-      session,
-      "document.querySelector('#nodes [data-node-id=\"pi-02\"]').getAttribute('aria-pressed')",
-    ),
-    "true",
-  );
-  // Change floors with the keyboard, then leave focus in place during polling.
-  await evaluate(session, "document.getElementById('placement-floor').focus()");
-  await key(session, "ArrowUp", "ArrowUp", 38);
-  assert.equal(await text(session, "#placement-location"), "1. kat");
-  assert.equal(
-    await evaluate(
-      session,
-      "document.querySelectorAll('#floor-nodes-1 .building-node').length",
-    ),
-    2,
-  );
-  await sleep(2300);
-  assert.equal(
-    await evaluate(session, "document.activeElement.id"),
-    "placement-floor",
-  );
-  await cdp("Page.reload", {}, session);
-  await untilPage(
-    session,
-    "document.querySelectorAll('#floor-nodes-1 .building-node').length === 2",
-    "saved floor placement",
-  );
-  await click(session, '#building .building-node[data-node-id="pi-02"]');
-  assert.equal(await text(session, "#placement-location"), "1. kat");
-  await evaluate(session, "document.getElementById('placement-floor').focus()");
-  await key(session, "ArrowDown", "ArrowDown", 40);
-  assert.equal(await text(session, "#placement-location"), "2. kat");
-  pass(
-    "Building selection, multiple Pis per floor, keyboard placement and reload persistence work",
-  );
-
-  await click(session, '#nodes [data-node-id="pi-02"]');
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
-    4,
-  );
-  assert.ok((await text(session, "#scope-caption")).startsWith("pi-02"));
-  await setSearch(session, " GUEST ");
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
     1,
   );
-  assert.equal(await text(session, ".detail-identity h3"), "Studio Guest");
-  await setSearch(session, "nothing-matches");
-  assert.equal(await text(session, "#empty-title"), "No matching observations");
-  await click(session, "#clear-filters");
-  await click(session, "#all-nodes");
-  await evaluate(
-    session,
-    "document.getElementById('band').value='5'; document.getElementById('band').dispatchEvent(new Event('change'))",
-  );
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
-    3,
-  );
-  pass("Pi, search, empty-search, and frequency filters compose correctly");
-
-  await click(session, ".export-menu summary");
+  await evaluate(session, "document.querySelector('.export-menu').open=true");
   await click(session, "#export-json");
   const { readdir } = await import("node:fs/promises");
   let downloaded;
   await until(async () => {
-    downloaded = (await readdir(temporary)).find((name) =>
-      name.endsWith(".json"),
+    downloaded = (await readdir(temporary)).find(
+      (name) => name.startsWith("device-scanner-") && name.endsWith(".json"),
     );
     return Boolean(downloaded);
   }, "JSON download");
@@ -486,190 +722,124 @@ try {
   assert.equal(exported.count, 3);
   assert.equal(exported.filters.band, "5");
   assert.equal(exported.outdated, false);
-  await click(session, ".export-menu summary");
+  assert.deepEqual(
+    new Set(exported.observations.map((item) => item.node_id)),
+    new Set(["pi-01", "pi-02", "pi-03"]),
+  );
+  for (const item of exported.observations)
+    assert.deepEqual(Object.keys(item.record), WIGLE_COLUMNS);
+  await evaluate(session, "document.querySelector('.export-menu').open=true");
   await click(session, "#export-csv");
   await until(
     async () =>
       (await readdir(temporary)).some((name) => name.endsWith(".csv")),
     "CSV download",
   );
-  const csv = await readFile(
-    path.join(
-      temporary,
-      (await readdir(temporary)).find((name) => name.endsWith(".csv")),
-    ),
-    "utf8",
+  const csvName = (await readdir(temporary)).find((name) =>
+    name.endsWith(".csv"),
   );
+  const csv = await readFile(path.join(temporary, csvName), "utf8");
   assert.equal(csv.trim().split("\r\n").length, 5);
   assert.ok(csv.startsWith("WigleWifi-1.6,"));
   assert.equal(csv.split("\r\n")[1], WIGLE_COLUMNS.join(","));
-  assert.deepEqual(Object.keys(exported.observations[0].record), WIGLE_COLUMNS);
-  pass("JSON and CSV downloads contain exactly the filtered rows");
-
-  await evaluate(
-    session,
-    "document.getElementById('band').value='all'; document.getElementById('band').dispatchEvent(new Event('change'))",
-  );
-  await click(session, "#results tr:nth-child(2) .result-name");
-  const selected = await evaluate(
-    session,
-    "document.querySelector('#results .selected').dataset.key",
-  );
-  await evaluate(
-    session,
-    "document.querySelector('#results .selected button').focus()",
-  );
-  await key(session, "ArrowDown", "ArrowDown", 40);
-  assert.notEqual(
-    await evaluate(
-      session,
-      "document.querySelector('#results .selected').dataset.key",
-    ),
-    selected,
-  );
-  const focusedKey = await evaluate(
-    session,
-    "document.activeElement.closest('tr').dataset.key",
-  );
-  const originalOrder = await evaluate(
-    session,
-    "Array.from(document.querySelectorAll('#results tr')).map(row => row.dataset.key)",
-  );
-  const updated = wifi(1);
-  updated[0].RSSI = -95;
-  await sendScan("pi-01", "wifi", updated);
-  await untilPage(
-    session,
-    "document.querySelector('#results tr .signal-reading').textContent === '-95 dBm'",
-    "updated signal",
-  );
-  assert.deepEqual(
-    await evaluate(
-      session,
-      "Array.from(document.querySelectorAll('#results tr')).map(row => row.dataset.key)",
-    ),
-    originalOrder,
-  );
-  assert.equal(
-    await evaluate(
-      session,
-      "document.activeElement.closest('tr')?.dataset.key",
-    ),
-    focusedKey,
-  );
-  await click(session, "#sort-now");
-  assert.notEqual(
-    await evaluate(
-      session,
-      "document.querySelector('#results tr').dataset.key",
-    ),
-    originalOrder[0],
-  );
-  pass(
-    "Polling preserves row order, keyboard focus and selection; explicit sorting reorders",
-  );
-
-  await sendScan("pi-01", "wifi", wifi(1));
-  await click(session, "#refresh");
-  await untilPage(
-    session,
-    "Array.from(document.querySelectorAll('#results .signal-reading')).some(el => el.textContent === '-38 dBm')",
-    "restored signal",
-  );
-  await click(session, "#sort-now");
+  for (const line of csv.trim().split("\r\n").slice(2))
+    assert.equal(line.split(",").length, 14);
+  await evaluate(session, "document.querySelector('.export-menu').open=false");
+  await setField(session, "band", "all");
   await click(session, "#results tr:first-child .result-name");
-  assert.ok(
-    await evaluate(
-      session,
-      "document.querySelectorAll('#history-chart .chart-point').length >= 2",
-    ),
+  await screenshot(session, "/tmp/device-scanner-oneshot-analysis.png");
+  pass(
+    "Analysis retains every Pi measurement and exports exact filtered WiGLE v1.6 records",
   );
-  await screenshot(session, "/tmp/device-scanner-desktop.png");
-  await click(session, "#theme");
+
+  await activeTab(session, "sensors");
+  for (let floor = 1; floor <= 3; floor++)
+    assert.equal(
+      await evaluate(
+        session,
+        `document.querySelector('#floor-nodes-${floor} .building-node')?.dataset.nodeId`,
+      ),
+      `pi-0${floor}`,
+    );
+  await click(session, '#building .building-node[data-node-id="pi-02"]');
+  await evaluate(session, "document.getElementById('placement-floor').focus()");
+  await key(session, "ArrowUp", "ArrowUp", 38);
+  await until(
+    async () =>
+      (await snapshot()).nodes.find((node) => node.node_id === "pi-02")
+        .floor === 1,
+    "shared floor assignment",
+  );
+  await untilPage(
+    session,
+    "document.querySelectorAll('#floor-nodes-1 .building-node').length === 2",
+    "two sensors on first floor",
+  );
+  await sleep(2300);
   assert.equal(
-    await evaluate(session, "document.documentElement.dataset.theme"),
-    "dark",
+    await evaluate(session, "document.activeElement.id"),
+    "placement-floor",
   );
-  await screenshot(session, "/tmp/device-scanner-dark.png");
+  assert.equal(JSON.parse(await readFile(placementsFile, "utf8"))["pi-02"], 1);
+  await screenshot(session, "/tmp/device-scanner-oneshot-sensors.png");
   await cdp("Page.reload", {}, session);
   await untilPage(
     session,
-    "document.querySelectorAll('#results tr').length === 12",
-    "reload",
+    "document.querySelectorAll('#device-rows tr').length === 14",
+    "reload after placement",
   );
+  await activeTab(session, "sensors");
   assert.equal(
-    await evaluate(session, "document.documentElement.dataset.theme"),
-    "dark",
+    await evaluate(
+      session,
+      "document.querySelectorAll('#floor-nodes-1 .building-node').length",
+    ),
+    2,
   );
-  await click(session, "#theme");
-  pass("Signal history records real reports; theme persists across reloads");
+  await click(session, '#building .building-node[data-node-id="pi-02"]');
+  assert.equal(await text(session, "#placement-location"), "1. kat");
+  await setField(session, "placement-floor", "2");
+  await until(
+    async () =>
+      (await snapshot()).nodes.find((node) => node.node_id === "pi-02")
+        .floor === 2,
+    "restored floor assignment",
+  );
+  pass(
+    "Keyboard placement supports multiple Pis per floor and survives reload in shared server storage",
+  );
 
   const malicious = '<img src=x onerror="window.__unsafe=1">';
-  await sendScan("pi-01", "bluetooth", [
-    record({
-      SSID: malicious,
-      MAC: "02:BB:CC:DD:EE:01",
-      RSSI: -60,
-      Type: "BLE",
-      Channel: 0,
-      AuthMode: "Misc [BLE] preserved",
-    }),
-  ]);
-  await click(session, "#refresh");
-  await click(session, "#radio-bluetooth");
+  const unsafeRecords = bluetooth(1);
+  unsafeRecords[1].SSID = malicious;
+  await sendScan("pi-01", "bluetooth", unsafeRecords);
+  await activeTab(session, "overview");
+  await setField(session, "device-search", "onerror");
+  await refresh();
   await untilPage(
     session,
-    `Array.from(document.querySelectorAll('.name-text')).some(el => el.textContent === ${JSON.stringify(malicious)})`,
+    "document.querySelectorAll('#device-rows tr').length === 1",
     "literal reported name",
   );
-  await setSearch(session, "onerror");
-  assert.equal(await text(session, ".detail-identity h3"), malicious);
-  await click(session, ".raw-details summary");
-  assert.match(await text(session, ".raw-details pre"), /preserved/);
-  await evaluate(
-    session,
-    "document.querySelector('.raw-details summary').focus(); const range = document.createRange(); range.selectNodeContents(document.querySelector('.detail-address')); getSelection().removeAllRanges(); getSelection().addRange(range)",
-  );
-  const selectedText = await evaluate(session, "getSelection().toString()");
-  await sleep(2300);
+  assert.match(await text(session, "#device-rows"), /<img src=x onerror=/);
+  await click(session, "#device-rows tr:first-child button");
+  assert.equal(JSON.parse(await text(session, "#device-raw")).SSID, malicious);
   assert.equal(
     await evaluate(
       session,
-      "document.activeElement.matches('.raw-details summary')",
-    ),
-    true,
-  );
-  assert.equal(
-    await evaluate(session, "getSelection().toString()"),
-    selectedText,
-  );
-  assert.equal(
-    await evaluate(session, "document.querySelector('.raw-details').open"),
-    true,
-  );
-  assert.equal(
-    await evaluate(
-      session,
-      "Boolean(window.__unsafe || document.querySelector('#results img'))",
+      "Boolean(window.__unsafe || document.querySelector('#device-rows img') || document.querySelector('#device-drawer img'))",
     ),
     false,
   );
-  assert.equal(
-    await evaluate(session, "document.getElementById('band-label').hidden"),
-    true,
-  );
-  assert.equal(
-    await text(session, "#distribution-title"),
-    "Signal distribution",
-  );
-  await setSearch(session, "");
+  await click(session, "#device-close");
+  await setField(session, "device-search", "");
+  await sendScan("pi-01", "bluetooth", bluetooth(1));
+  await refresh();
   pass(
-    "Bluetooth uses dBm; names are safe text; detail focus, selection and expansion survive polling",
+    "Reported names remain literal text in grouped rows and raw-record details",
   );
 
-  await setSearch(session, "");
-  await click(session, "#radio-wifi");
-  await click(session, '#nodes [data-node-id="pi-03"]');
+  blockedRadios.add("pi-03:wifi");
   await post("pi-03", {
     kind: "scan",
     radio: "wifi",
@@ -677,86 +847,122 @@ try {
     error: "Wi-Fi adapter unavailable",
     observed_at: new Date().toISOString(),
   });
-  await click(session, "#refresh");
+  await refresh();
   await untilPage(
     session,
-    "document.querySelectorAll('#results tr.previous').length === 4",
-    "retained results",
+    "document.getElementById('summary-wifi').textContent === '7'",
+    "partial Wi-Fi count",
   );
-  assert.equal(await text(session, "#observations-value"), "0");
+  assert.equal(await text(session, "#summary-bluetooth"), "4");
+  assert.match(await text(session, "#environment-message"), /3\. kat/);
+  assert.match(await text(session, "#environment-message"), /Wi-Fi/);
+  assert.match(await text(session, "#coverage-value"), /2\s*\/\s*3/);
+  assert.equal(
+    (await snapshot()).nodes.find((node) => node.node_id === "pi-03").online,
+    true,
+  );
+  await setField(session, "device-status", "unknown");
+  assert.equal(await rowCount(session), 3);
+  await setField(session, "device-status", "all");
+  await activeTab(session, "sensors");
   assert.match(
-    await text(session, "#details-content"),
+    await text(session, '#nodes tr[data-node-id="pi-03"]'),
     /Wi-Fi adapter unavailable/,
   );
-  assert.equal(
-    await evaluate(
-      session,
-      "document.querySelectorAll('#distribution-chart .chart-bar').length",
-    ),
-    0,
-  );
-  await sendScan("pi-03", "wifi", []);
-  await click(session, "#refresh");
-  await untilPage(
-    session,
-    "document.querySelectorAll('#results tr').length === 0",
-    "successful empty scan",
-  );
-  assert.equal(await text(session, "#errors-value"), "0");
   pass(
-    "Radio errors retain labeled previous data; successful empty scans clear it",
+    "A live heartbeat does not hide a radio error or invent observations on the affected floor",
   );
 
   await sendScan("pi-03", "wifi", wifi(3));
-  paused.add(3);
+  blockedRadios.add("pi-03:wifi");
+  await activeTab(session, "overview");
+  await refresh();
+  await until(
+    async () =>
+      (await snapshot()).nodes.find((node) => node.node_id === "pi-03").radios
+        .wifi.freshness === "stale",
+    "radio ages despite healthy heartbeat",
+    36000,
+  );
+  await refresh();
   await untilPage(
     session,
-    "document.querySelector('[data-node-id=\"pi-03\"] .state-label').textContent === 'Offline'",
-    "offline Pi",
+    "document.getElementById('summary-wifi').textContent === '7'",
+    "stale radio removed from current count",
   );
-  assert.equal(await text(session, "#online-value"), "2");
   assert.equal(
-    await evaluate(
-      session,
-      "document.querySelector('#building .building-node[data-node-id=\"pi-03\"]').dataset.state",
-    ),
-    "offline",
+    (await snapshot()).nodes.find((node) => node.node_id === "pi-03").online,
+    true,
   );
-  assert.equal(await text(session, "#observations-value"), "0");
-  paused.delete(3);
+  assert.match(await text(session, "#coverage-value"), /2\s*\/\s*3/);
+  assert.match(await text(session, "#environment-message"), /güncel değil/);
+  await sendScan("pi-03", "wifi", wifi(3));
+  await sendScan("pi-03", "wifi", []);
+  await refresh();
   await untilPage(
     session,
-    "document.querySelector('[data-node-id=\"pi-03\"] .state-label').textContent === 'Online'",
-    "Pi reconnects",
+    "document.getElementById('summary-wifi').textContent === '10'",
+    "grace period counts",
   );
+  await setField(session, "device-status", "recent");
+  assert.equal(await rowCount(session), 3);
+  await setField(session, "device-status", "all");
+  await sendScan("pi-03", "wifi", wifi(3));
   pass(
-    "Offline Pi is independent of healthy scanners and recovers on heartbeat",
+    "Stale radios stay distinct from live sensors; brief absences use a labeled 60-second grace period",
   );
 
+  paused.add("pi-03");
+  await until(
+    async () =>
+      !(await snapshot()).nodes.find((node) => node.node_id === "pi-03").online,
+    "offline Pi",
+    10000,
+  );
+  await refresh();
+  await untilPage(
+    session,
+    "document.getElementById('summary-wifi').textContent === '7' && document.getElementById('summary-bluetooth').textContent === '3'",
+    "offline sensor count exclusion",
+  );
+  assert.match(await text(session, "#coverage-value"), /2\s*\/\s*3/);
+  paused.delete("pi-03");
+  await untilPage(
+    session,
+    "document.getElementById('summary-wifi').textContent === '10' && document.getElementById('summary-bluetooth').textContent === '4'",
+    "reconnected Pi readings",
+  );
+  pass(
+    "Offline sensors affect only their observations and recover independently",
+  );
+
+  await setField(session, "device-search", "Ofis Ağı");
+  await click(session, "#device-rows tr:first-child button");
+  await click(session, '#device-sources [data-source-id*="pi-01"]');
+  const linesBeforeOutage = await evaluate(
+    session,
+    "document.querySelectorAll('#device-history-chart .chart-line').length",
+  );
+  assert.ok(linesBeforeOutage > 0);
+  await click(session, "#device-close");
+  await setField(session, "device-search", "");
   await cdp(
     "Network.emulateNetworkConditions",
     { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 },
     session,
   );
-  await click(session, "#refresh");
+  await refresh();
   await untilPage(
     session,
     "!document.getElementById('connection-banner').hidden",
-    "server outage banner",
+    "server connection failure",
   );
-  assert.equal(await text(session, "#online-value"), "—");
-  assert.equal(
-    await evaluate(
-      session,
-      "document.querySelector('#building .building-node[data-node-id=\"pi-03\"]').dataset.state",
-    ),
-    "unknown",
-  );
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
-    4,
-  );
-  assert.match(await text(session, ".state-badge"), /Outdated/);
+  assert.equal(await text(session, "#summary-wifi"), "—");
+  assert.equal(await text(session, "#summary-bluetooth"), "—");
+  assert.equal(await rowCount(session), 14);
+  await setField(session, "device-status", "unknown");
+  assert.equal(await rowCount(session), 14);
+  await setField(session, "device-status", "all");
   await cdp(
     "Network.emulateNetworkConditions",
     {
@@ -767,92 +973,127 @@ try {
     },
     session,
   );
-  await click(session, "#refresh");
+  await refresh();
   await untilPage(
     session,
-    "document.getElementById('connection-banner').hidden",
-    "server reconnection",
+    "document.getElementById('connection-banner').hidden && document.getElementById('summary-wifi').textContent === '10'",
+    "server reconnect",
   );
+  await setField(session, "device-search", "Ofis Ağı");
+  await click(session, "#device-rows tr:first-child button");
+  await click(session, '#device-sources [data-source-id*="pi-01"]');
+  await untilPage(
+    session,
+    `document.querySelectorAll('#device-history-chart .chart-line').length > ${linesBeforeOutage}`,
+    "signal history gap across server outage",
+  );
+  await click(session, "#device-close");
+  await setField(session, "device-search", "");
   pass(
-    "Server outage preserves labeled old results and recovers without reload",
+    "Server loss preserves labeled history with a chart gap while totals become unknown, then recovers",
   );
 
-  await click(session, "#all-nodes");
-  for (const width of [1024, 768, 390]) {
-    await cdp(
-      "Emulation.setDeviceMetricsOverride",
-      { width, height: 844, deviceScaleFactor: 1, mobile: width < 500 },
-      session,
-    );
-    assert.equal(
-      await evaluate(
-        session,
-        "document.documentElement.scrollWidth <= innerWidth",
-      ),
-      true,
-      `overflow at ${width}px`,
-    );
-  }
-  await click(session, '#nodes [data-node-id="pi-02"]');
-  assert.equal(
-    await evaluate(session, "document.querySelectorAll('#results tr').length"),
-    4,
+  const many = Array.from({ length: 105 }, (_, index) =>
+    record({
+      SSID: `Test ağı ${String(index + 1).padStart(3, "0")}`,
+      MAC: `02:D0:00:00:00:${(index + 1).toString(16).padStart(2, "0").toUpperCase()}`,
+      RSSI: -40 - (index % 50),
+      Frequency: 2412,
+      Channel: 1,
+      AuthMode: "[WPA2-PSK-CCMP][ESS]",
+    }),
   );
-  await click(session, "#results tr:first-child .result-name");
-  await screenshot(session, "/tmp/device-scanner-mobile.png");
-  pass("Tablet and phone layouts fit; Pi selection and details work on mobile");
-
-  // Additional Pis have no assumed physical location; explicitly assign them.
-  await sendScan("pi-04", "wifi", wifi(4));
-  await click(session, "#refresh");
+  await sendScan("pi-01", "wifi", [...wifi(1), ...many]);
+  await refresh();
   await untilPage(
     session,
-    "document.querySelector('#unplaced-nodes .building-node')?.dataset.nodeId === 'pi-04'",
-    "additional Pi in unplaced area",
+    "document.getElementById('summary-wifi').textContent === '115'",
+    "large device set",
   );
-  await click(session, '#unplaced-nodes .building-node[data-node-id="pi-04"]');
-  assert.equal(await text(session, "#placement-location"), "Kat seçilmedi");
-  await evaluate(
-    session,
-    "const select = document.getElementById('placement-floor'); select.value = '2'; select.dispatchEvent(new Event('change'))",
-  );
+  assert.equal(await rowCount(session), 50);
   assert.equal(
-    await evaluate(
-      session,
-      "document.querySelectorAll('#floor-nodes-2 .building-node').length",
-    ),
-    2,
+    await evaluate(session, "document.getElementById('device-more').hidden"),
+    false,
   );
+  await click(session, "#device-more");
+  assert.equal(await rowCount(session), 100);
+  await click(session, "#device-more");
+  assert.equal(await rowCount(session), 119);
   assert.equal(
-    await evaluate(
-      session,
-      "document.getElementById('building-unplaced').hidden",
-    ),
+    await evaluate(session, "document.getElementById('device-more').hidden"),
     true,
   );
-  assert.equal(
-    await evaluate(
-      session,
-      "document.documentElement.scrollWidth <= innerWidth",
-    ),
-    true,
+  await activeTab(session, "devices");
+  await setField(session, "device-search", "Test ağı");
+  assert.equal(await text(session, "#device-count"), "105");
+  assert.equal(await text(session, "#summary-wifi"), "115");
+  assert.equal(await text(session, "#summary-bluetooth"), "4");
+  pass(
+    "Large scans render 50 rows at a time and preserve global metrics when the full device list is filtered",
   );
-  const bounds = await evaluate(
-    session,
-    "Array.from(document.querySelectorAll('#floor-nodes-2 .building-node')).map(el => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })",
-  );
+
+  await activeTab(session, "overview");
+  await setField(session, "device-search", "Ofis Ağı");
+  await click(session, "#device-rows tr:first-child button");
+  await click(session, '#device-sources [data-source-id*="pi-01"]');
   assert.ok(
-    bounds[1].top >= bounds[0].bottom,
-    "multiple Pis wrap without overlap on a phone",
+    await evaluate(
+      session,
+      "document.querySelectorAll('#device-history-chart .chart-point').length > 1",
+    ),
   );
-  await screenshot(session, "/tmp/device-scanner-building-mobile.png");
-  await cdp(
-    "Emulation.setDeviceMetricsOverride",
-    { width: 1536, height: 1050, deviceScaleFactor: 1, mobile: false },
+  await click(session, "#device-close");
+  paused.add("pi-01");
+  await until(
+    () => !fixtureBusy,
+    "fixture reports settle before scanner mode switch",
+  );
+  await post("pi-01", {
+    scanner: "real",
+    kind: "heartbeat",
+    enabled_radios: ["wifi", "bluetooth"],
+    expected_cycle_seconds: { wifi: 2, bluetooth: 2 },
+  });
+  await refresh();
+  await untilPage(
     session,
+    "document.getElementById('summary-wifi').textContent === '7'",
+    "demo records cleared on real-mode heartbeat",
   );
-  await screenshot(session, "/tmp/device-scanner-building.png");
-  pass("Additional Pis can be assigned to occupied floors and wrap on mobile");
+  assert.match(await text(session, "#demo-banner"), /KARMA/);
+  await post("pi-01", {
+    scanner: "real",
+    kind: "scan",
+    radio: "wifi",
+    status: "success",
+    observed_at: new Date().toISOString(),
+    observations: [record({ ...wifi(1)[0], RSSI: -22 })],
+  });
+  await refresh();
+  await click(session, "#device-rows tr:first-child button");
+  await untilPage(
+    session,
+    "!!document.querySelector('#device-sources [data-source-id*=\"pi-01\"]')",
+    "new real source",
+  );
+  await click(session, '#device-sources [data-source-id*="pi-01"]');
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#device-history-chart .chart-point').length",
+    ),
+    1,
+  );
+  assert.equal(JSON.parse(await text(session, "#device-raw")).RSSI, -22);
+  assert.doesNotMatch(
+    await text(session, '#device-sources [data-source-id*="pi-01"]'),
+    /Demo/,
+  );
+  await click(session, "#device-close");
+  pass(
+    "Switching a Pi from demo to real clears its old records and signal history before new measurements",
+  );
+
   assert.deepEqual(runtimeErrors, []);
   assert.equal(
     browserRequests.some(
@@ -862,7 +1103,7 @@ try {
   );
   assert.equal(fixtureFailure, undefined);
   console.log(
-    `\n${checks.length} browser checks passed. Screenshots: /tmp/device-scanner-{desktop,dark,mobile}.png`,
+    `\n${checks.length} browser checks passed. Screenshots: /tmp/device-scanner-oneshot-{overview,dark,drawer,sensors,analysis}.png`,
   );
 } finally {
   clearInterval(heartbeatTimer);
