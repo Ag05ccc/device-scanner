@@ -10,6 +10,8 @@ import signal
 import sys
 from urllib.request import Request, urlopen
 
+from .wigle import validate_record
+
 
 LOG = logging.getLogger(__name__)
 HTTP_TIMEOUT = 3.0
@@ -84,6 +86,8 @@ async def radio_loop(*, node_id, server_url, scanner, radio, interval, timeout,
             observations = await asyncio.wait_for(scan(timeout, stop_event, **options), timeout + 10)
             if not isinstance(observations, list):
                 raise ValueError("Scanner returned an invalid observation list")
+            for observation in observations:
+                validate_record(observation, radio)
             report.update(status="success", observations=observations)
         except asyncio.CancelledError:
             raise

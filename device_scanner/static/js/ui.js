@@ -38,7 +38,7 @@ export function ageText(timestamp) {
 }
 
 export function valueText(value) {
-  if (value === null || value === undefined) return "Unknown";
+  if (value === null || value === undefined || value === "") return "Unknown";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }

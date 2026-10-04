@@ -15,6 +15,8 @@ import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
+from .wigle import validate_record
+
 
 MAX_BODY_BYTES = 1024 * 1024
 NODE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
@@ -78,14 +80,13 @@ def _validate_report(report: Any) -> dict[str, Any]:
         observations = report.get("observations")
         if not isinstance(observations, list):
             raise ValueError("observations must be an array")
+        identities = set()
         for observation in observations:
-            if not isinstance(observation, dict):
-                raise ValueError("Each observation must be an object")
-            path = observation.get("path")
-            if not isinstance(path, str) or not path:
-                raise ValueError("Each observation needs a nonempty path")
-            if not isinstance(observation.get("properties"), dict):
-                raise ValueError("Each observation needs a properties object")
+            validate_record(observation, report["radio"])
+            identity = (observation["Type"], observation["MAC"].upper())
+            if identity in identities:
+                raise ValueError("A scan must not repeat a Type/MAC observation")
+            identities.add(identity)
     else:
         raise ValueError("status must be success or error")
     return report

@@ -37,8 +37,8 @@ export function renderResults(rows, view, context) {
   );
   $("result-count").textContent = rows.length;
   $("name-column").textContent = wifi ? "NETWORK / BSSID" : "DEVICE / ADDRESS";
-  $("channel-column").textContent = wifi ? "CHANNEL" : "ADDRESS TYPE";
-  $("security-column").textContent = wifi ? "SECURITY" : "PAIRED";
+  $("channel-column").textContent = wifi ? "CHANNEL" : "TYPE";
+  $("security-column").textContent = wifi ? "SECURITY" : "CAPABILITIES";
   $("scope-caption").textContent =
     `${view.nodeId === "all" ? "All scanners" : view.nodeId} · one observation per Pi`;
   const body = $("results");
@@ -55,32 +55,19 @@ export function renderResults(rows, view, context) {
       row.id === view.selectedId,
     );
     setText(tr.querySelector(".address"), row.address);
-    setText(
-      tr.querySelector(".signal-reading"),
-      signalText(row.signal, row.radio),
-    );
-    const percent = signalPercent(row.signal, row.radio);
+    setText(tr.querySelector(".signal-reading"), signalText(row.signal));
+    const percent = signalPercent(row.signal);
     tr.querySelector(".signal-fill").style.width = `${percent}%`;
     tr.querySelector(".signal-fill").classList.toggle("weak", percent < 40);
-    const props = row.record.properties;
     setText(
       tr.querySelector(".channel-value"),
-      wifi ? (row.channel ?? "—") : props.AddressType || "Unknown",
+      wifi ? (row.channel ?? "—") : row.record.Type,
     );
     setText(
       tr.children[2].querySelector(".cell-secondary"),
       wifi && row.band !== "unknown" ? `${row.band} GHz` : "",
     );
-    setText(
-      tr.querySelector(".security-badge"),
-      wifi
-        ? row.security
-        : props.Paired === true
-          ? "Yes"
-          : props.Paired === false
-            ? "No"
-            : "Unknown",
-    );
+    setText(tr.querySelector(".security-badge"), row.security);
     setText(tr.querySelector(".row-node"), row.nodeId);
     setText(
       tr.children[4].querySelector(".cell-secondary"),

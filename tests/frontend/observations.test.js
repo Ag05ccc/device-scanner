@@ -11,7 +11,11 @@ import {
 import {
   exportDocument,
   toCsv,
+  WIGLE_COLUMNS,
 } from "../../device_scanner/static/js/export.js";
+
+import { record } from "./fixtures.js";
+import { execFileSync } from "node:child_process";
 
 function node(
   id,
@@ -28,12 +32,18 @@ function node(
         received_at: stamp,
         observed_at: stamp,
         error: status === "error" ? "Unavailable" : null,
-        observations: [{ path: "/ap/1", properties: props }],
+        observations: [record(props)],
       },
       bluetooth: {
         status: "success",
         observations: [
-          { path: "/bt/1", properties: { Name: "Beacon", RSSI: -68 } },
+          record({
+            SSID: "Beacon",
+            RSSI: -68,
+            Type: "BLE",
+            Channel: 0,
+            Frequency: 7936,
+          }),
         ],
       },
     },
@@ -42,7 +52,7 @@ function node(
 
 test("radio and Pi scopes preserve independent observations and unknown values", () => {
   const nodes = [
-    node("pi-01", { SSID: "", BSSID: "02:00:00:00:00:01", Strength: 0 }),
+    node("pi-01", { SSID: "", MAC: "02:00:00:00:00:01", RSSI: 0 }),
     node("pi-02", {}),
   ];
   const rows = observations(nodes, "wifi");
@@ -50,7 +60,7 @@ test("radio and Pi scopes preserve independent observations and unknown values",
   assert.equal(rows[0].name, "Hidden network");
   assert.equal(rows[0].signal, 0);
   assert.equal(rows[1].signal, null);
-  assert.equal(rows[1].name, "Unnamed network");
+  assert.equal(rows[1].name, "Hidden network");
   assert.notEqual(rows[0].id, rows[1].id);
   assert.equal(observations(nodes, "wifi", "pi-02").length, 1);
   assert.equal(observations(nodes, "bluetooth")[0].signal, -68);
@@ -59,9 +69,9 @@ test("radio and Pi scopes preserve independent observations and unknown values",
 test("band and trimmed name/address/node search compose; unknown signals sort last", () => {
   const rows = observations(
     [
-      node("pi-01", { SSID: "Office", Strength: 70, Frequency: 5180 }),
-      node("pi-02", { SSID: "Office", Strength: 20, Frequency: 2437 }),
-      node("pi-03", { SSID: "Guest", BSSID: "AA:BB:CC:DD:EE:FF" }),
+      node("pi-01", { SSID: "Office", RSSI: -40, Frequency: 5180 }),
+      node("pi-02", { SSID: "Office", RSSI: -80, Frequency: 2437 }),
+      node("pi-03", { SSID: "Guest", MAC: "AA:BB:CC:DD:EE:FF" }),
     ],
     "wifi",
   );
@@ -70,7 +80,7 @@ test("band and trimmed name/address/node search compose; unknown signals sort la
   assert.equal(filterRows(rows, { query: "PI-02" })[0].nodeId, "pi-02");
   assert.deepEqual(
     sortRows(rows).map((row) => row.signal),
-    [70, 20, null],
+    [-40, -80, null],
   );
   assert.deepEqual([2437, 5180, 5955, undefined].map(bandOf), [
     "2.4",
@@ -88,17 +98,17 @@ test("band and trimmed name/address/node search compose; unknown signals sort la
 test("channel counts deduplicate APs across Pis but separate bands and omit retained results", () => {
   const props = {
     SSID: "Office",
-    BSSID: "AA:BB:CC:DD:EE:FF",
+    MAC: "AA:BB:CC:DD:EE:FF",
     Channel: 1,
     Frequency: 2412,
   };
   const rows = observations(
     [
       node("pi-01", props),
-      node("pi-02", { ...props, BSSID: props.BSSID.toLowerCase() }),
+      node("pi-02", { ...props, MAC: props.MAC.toLowerCase() }),
       node("pi-03", { ...props, Frequency: 5955 }),
-      node("pi-04", { ...props, BSSID: "other" }, { online: false }),
-      node("pi-05", { ...props, BSSID: "failed" }, { status: "error" }),
+      node("pi-04", { ...props, MAC: "other" }, { online: false }),
+      node("pi-05", { ...props, MAC: "failed" }, { status: "error" }),
     ],
     "wifi",
   );
@@ -112,7 +122,7 @@ test("channel counts deduplicate APs across Pis but separate bands and omit reta
 
 test("history adds one point per new report, keeps gaps, bounds memory", () => {
   const history = new Map();
-  let rows = observations([node("pi-01", { Strength: 50 })], "wifi");
+  let rows = observations([node("pi-01", { RSSI: -50 })], "wifi");
   const key = rows[0].id;
   recordHistory(history, rows, 1000);
   recordHistory(history, rows, 2000);
@@ -132,9 +142,9 @@ test("history adds one point per new report, keeps gaps, bounds memory", () => {
   assert.equal(history.size, 0);
 });
 
-test("exports preserve displayed order, original properties, errors and filter context", () => {
+test("exports preserve displayed order, original WiGLE records, errors and filter context", () => {
   const rows = observations(
-    [node("pi-01", { SSID: "Office", Strength: 70 }, { status: "error" })],
+    [node("pi-01", { SSID: "Office", RSSI: -40 }, { status: "error" })],
     "wifi",
   );
   const view = {
@@ -148,8 +158,9 @@ test("exports preserve displayed order, original properties, errors and filter c
   assert.equal(doc.outdated, true);
   assert.equal(doc.filters.query, "office");
   assert.equal(doc.observations[0].state, "error");
-  assert.equal(doc.observations[0].properties.Strength, 70);
-  assert.match(toCsv(doc), /Unavailable/);
+  assert.equal(doc.observations[0].record.RSSI, -40);
+  assert.match(toCsv(doc), /WigleWifi-1.6/);
+  assert.doesNotMatch(toCsv(doc), /Unavailable/);
   assert.equal(exportDocument([], view, true, null).count, 0);
   rows[0].record.node_id = "misleading-extra-field";
   rows[0].record.state = "latest";
@@ -158,20 +169,82 @@ test("exports preserve displayed order, original properties, errors and filter c
   assert.equal(safe.observations[0].state, "error");
 });
 
-test("CSV quotes commas and newlines and neutralizes formulas in reported text", () => {
+test("CSV follows WiGLE v1.6 and preserves numeric RSSI, UTF-8, quotes and blanks", () => {
+  const columns = JSON.parse(
+    execFileSync(
+      process.env.PYTHON || "python3",
+      [
+        "-c",
+        "import json; from device_scanner.wigle import COLUMNS; print(json.dumps(COLUMNS))",
+      ],
+      { cwd: new URL("../../", import.meta.url), encoding: "utf8" },
+    ),
+  );
+  assert.deepEqual(WIGLE_COLUMNS, columns);
+  const wifi = record({
+    SSID: '=Örnek,"quoted"\nname',
+    RSSI: -43.5,
+    Channel: 6,
+    Frequency: 2437,
+  });
+  const bt = record({
+    SSID: "Beacon",
+    Type: "BLE",
+    Channel: 0,
+    Frequency: 7936,
+    RSSI: -67,
+    MfgrId: 72,
+  });
   const doc = {
-    outdated: false,
-    filters: {},
     observations: [
-      {
-        node_id: "pi-1",
-        error: '  =SUM(1,2)\n"quoted"',
-        path: "@danger",
-        properties: { SSID: "=not executable inside JSON" },
-      },
+      { node_id: "pi-01", record: wifi },
+      { node_id: "pi-01", record: bt },
     ],
   };
   const csv = toCsv(doc);
-  assert.ok(csv.includes('"\'  =SUM(1,2)\n""quoted"""'));
-  assert.ok(csv.includes('"\'@danger"'));
+  assert.ok(csv.startsWith("WigleWifi-1.6,"));
+  assert.ok(csv.includes("device=pi-01"));
+  assert.ok(
+    csv.includes("star=Sol,body=3,subBody=0\r\n" + columns.join(",") + "\r\n"),
+  );
+  // Parse with an independent RFC4180 CSV reader, including embedded newlines.
+  const parsed = JSON.parse(
+    execFileSync(
+      process.env.PYTHON || "python3",
+      [
+        "-c",
+        "import csv,io,json,sys; print(json.dumps(list(csv.reader(io.StringIO(sys.stdin.read())))))",
+      ],
+      { input: csv, encoding: "utf8" },
+    ),
+  );
+  assert.equal(parsed.length, 4);
+  assert.deepEqual(
+    parsed[2],
+    columns.map((key) => String(wifi[key])),
+  );
+  assert.deepEqual(
+    parsed[3],
+    columns.map((key) => String(bt[key])),
+  );
+  assert.equal(toCsv({ observations: [] }).trim().split("\r\n").length, 2);
+});
+
+test("Bluetooth type codes never become Wi-Fi bands; blank RSSI stays unknown", () => {
+  const rows = observations([node("pi-01", {})], "bluetooth");
+  assert.equal(rows[0].name, "Beacon");
+  assert.equal(rows[0].band, "unknown");
+  assert.equal(rows[0].record.Frequency, 7936);
+  const wifi = observations([node("pi-01", { RSSI: "" })], "wifi")[0];
+  assert.equal(wifi.signal, null);
+  assert.equal(wifi.channel, null);
+  const same = observations(
+    [node("pi-01", { MAC: "aa:bb:cc:dd:ee:ff" })],
+    "wifi",
+  )[0];
+  const changed = observations(
+    [node("pi-01", { MAC: "AA:BB:CC:DD:EE:FF", SSID: "Renamed", RSSI: -45 })],
+    "wifi",
+  )[0];
+  assert.equal(same.id, changed.id);
 });

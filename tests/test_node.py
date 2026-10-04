@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 from device_scanner import node
 from device_scanner.scanners import dummy
+from device_scanner.wigle import COLUMNS, new_record, validate_record
 
 
 class NodeTests(unittest.IsolatedAsyncioTestCase):
@@ -13,9 +14,16 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
         again = await dummy.scan(0.001, node_id="pi-1", radio="bluetooth")
         second = await dummy.scan(0.001, node_id="pi-2", radio="bluetooth")
         self.assertEqual(first, again)
-        self.assertNotEqual(first[0]["properties"]["Address"], second[0]["properties"]["Address"])
+        self.assertNotEqual(first[0]["MAC"], second[0]["MAC"])
         wifi = await dummy.scan(0.001, node_id="pi-1", radio="wifi")
-        self.assertIn("SSID", wifi[0]["properties"])
+        for radio, records in (("wifi", wifi), ("bluetooth", first)):
+            self.assertEqual(tuple(records[0]), COLUMNS)
+            validate_record(records[0], radio)
+            self.assertLess(records[0]["RSSI"], 0)
+        self.assertEqual(first[0]["Channel"], 0)
+        self.assertEqual(first[0]["Type"], "BLE")
+        self.assertEqual(wifi[0]["Type"], "WIFI")
+        self.assertEqual(wifi[0]["CurrentLatitude"], first[0]["CurrentLatitude"])
 
     async def test_dummy_stop_returns_no_partial_observations(self):
         stop = asyncio.Event()
@@ -43,7 +51,7 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError("Bluetooth unavailable")
 
         async def good_scan(*args, **kwargs):
-            return [{"path": "/wifi/demo", "properties": {"SSID": "Demo"}}]
+            return [new_record("02:00:00:00:00:01", "Demo", "WIFI")]
 
         def load(scanner, radio, node_id):
             return failed_scan if radio == "bluetooth" else good_scan
@@ -75,7 +83,7 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
             try:
                 scanning.set()
                 await stop_event.wait()
-                return [{"path": "/partial", "properties": {}}]
+                return [new_record("02:00:00:00:00:01", "Partial", "BT")]
             finally:
                 cleaned.set()
 

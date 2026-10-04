@@ -10,6 +10,9 @@ import signal
 import sys
 import time
 
+from ..wigle import HardwareRecords, format_table, signal_sort_key as wigle_sort_key
+from .iw import read_signals
+
 try:
     from dbus_fast import BusType, Message, MessageType, Variant
     from dbus_fast.aio import MessageBus
@@ -27,7 +30,6 @@ PROPERTIES = "org.freedesktop.DBus.Properties"
 DBUS = "org.freedesktop.DBus"
 DBUS_PATH = "/org/freedesktop/DBus"
 CALL_TIMEOUT = 5
-DISPLAY_PROPERTIES = ("BSSID", "SSID", "SSIDHex", "Frequency", "Channel", "Strength", "Security")
 
 
 class ScanError(Exception):
@@ -71,42 +73,15 @@ def channel_for_frequency(frequency):
     return None
 
 
-def advertised_security(properties):
-    """Summarize advertised authentication flags; retain raw flags in results."""
-    flags, wpa, rsn = (properties.get(key) for key in ("Flags", "WpaFlags", "RsnFlags"))
-    if any(value is None for value in (flags, wpa, rsn)):
-        return None
-    labels = []
-    if wpa:
-        labels.append("WPA")
-    if rsn & 0x100:
-        labels.append("WPA2 Personal")
-    if rsn & 0x200:
-        labels.append("WPA2/RSN Enterprise")
-    if rsn & 0x400:
-        labels.append("WPA3 Personal")
-    if rsn & 0x800:
-        labels.append("Enhanced Open (OWE)")
-    if rsn & 0x1000:
-        labels.append("OWE transition")
-    if rsn & 0x2000:
-        labels.append("WPA3 Enterprise Suite-B")
-    if rsn and not any(rsn & bit for bit in (0x100, 0x200, 0x400, 0x800, 0x1000, 0x2000)):
-        labels.append("RSN (authentication unknown)")
-    return ", ".join(labels) if labels else ("WEP/privacy" if flags & 1 else "Open")
-
-
 def access_point_record(path, raw):
     properties = normalize(raw)
     ssid_hex = properties.get("Ssid")
     properties.update({
         "BSSID": properties.get("HwAddress", "").upper() or None,
         "SSID": bytes.fromhex(ssid_hex).decode("utf-8", errors="replace") if ssid_hex is not None else None,
-        "SSIDHex": ssid_hex,
         "Channel": channel_for_frequency(properties.get("Frequency")),
-        "Security": advertised_security(properties),
     })
-    return {"path": path, "properties": {**dict.fromkeys(DISPLAY_PROPERTIES), **properties}}
+    return {"path": path, "properties": properties}
 
 
 def signal_sort_key(record):
@@ -145,7 +120,7 @@ async def dbus_call(bus, destination, path, interface, member, signature="", bod
     return reply.body
 
 
-async def scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageBus,
+async def _scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageBus,
                clock=None, on_status=None):
     """Return a fresh AP snapshot, without altering connectivity.
 
@@ -248,6 +223,7 @@ async def scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageB
                 break
         completed = last_scan / 1000
         paths = (await dbus_call(bus, NM, device_path, WIRELESS, "GetAllAccessPoints"))[0]
+        signals = await read_signals(name)
         for path in paths:
             try:
                 raw = await get_all(path, ACCESS_POINT)
@@ -260,6 +236,7 @@ async def scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageB
             if not is_fresh(properties.get("LastSeen"), started, completed):
                 continue
             record = access_point_record(path, raw)
+            record["properties"]["RSSI"] = signals.get((record["properties"]["BSSID"], properties.get("Frequency")))
             key = record["properties"]["BSSID"] or path
             old = records.get(key)
             if old is None or properties["LastSeen"] >= old["properties"]["LastSeen"]:
@@ -293,12 +270,15 @@ async def scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageB
             await asyncio.gather(disconnect_waiter, return_exceptions=True)
 
 
-def display_value(value):
-    if value is None:
-        return "Unknown"
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=True, sort_keys=True)
-    return "".join(char if char.isprintable() else repr(char)[1:-1] for char in str(value))
+_records = HardwareRecords("wifi")
+
+
+async def scan(timeout, stop_event=None, *, interface=None, bus_factory=MessageBus,
+               clock=None, on_status=None):
+    """Return fresh access points using the shared WiGLE v1.6 fields."""
+    native = await _scan(timeout, stop_event, interface=interface, bus_factory=bus_factory,
+                         clock=clock, on_status=on_status)
+    return sorted((_records.convert(record) for record in native), key=wigle_sort_key)
 
 
 def format_results(records, json_output=False):
@@ -306,20 +286,7 @@ def format_results(records, json_output=False):
         return json.dumps(records, indent=2, ensure_ascii=True, allow_nan=False)
     if not records:
         return "No Wi-Fi access points discovered."
-    rows = [["SSID", "BSSID", "Signal (%)", "Channel", "Security"]]
-    for record in records:
-        props = record["properties"]
-        ssid = "(Hidden)" if props.get("SSID") == "" else props.get("SSID")
-        rows.append([display_value(ssid)[:32], display_value(props.get("BSSID")),
-                     display_value(props.get("Strength")), display_value(props.get("Channel")),
-                     display_value(props.get("Security"))])
-    widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
-    lines = ["  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip() for row in rows]
-    lines.append(f"\n{len(records)} access point(s). MaxBitrate, when present, is advertised capability in Kb/s.")
-    for record in records:
-        lines.append(f"\n{display_value(record['path'])}")
-        lines.extend(f"  {key}: {display_value(value)}" for key, value in sorted(record["properties"].items()))
-    return "\n".join(lines)
+    return format_table(records)
 
 
 def positive_timeout(value):

@@ -10,6 +10,8 @@ import math
 import signal
 import sys
 
+from ..wigle import HardwareRecords, format_table, signal_sort_key as wigle_sort_key
+
 try:
     from dbus_fast import BusType, Message, MessageType, Variant
     from dbus_fast.aio import MessageBus
@@ -146,7 +148,7 @@ async def dbus_call(bus, destination, path, interface, member, signature="", bod
     return reply.body
 
 
-async def scan(timeout, stop_event=None, *, adapter=None, bus_factory=MessageBus, on_update=None, on_status=None):
+async def _scan(timeout, stop_event=None, *, adapter=None, bus_factory=MessageBus, on_update=None, on_status=None):
     """Run one discovery session; a stop event returns collected results early.
 
     Optional synchronous callbacks receive a device record or status string on
@@ -284,15 +286,15 @@ async def scan(timeout, stop_event=None, *, adapter=None, bus_factory=MessageBus
             await asyncio.gather(*waiters, return_exceptions=True)
 
 
-def display_value(value):
-    if value is None:
-        return "Unknown"
-    if isinstance(value, bool):
-        return "Yes" if value else "No"
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=True, sort_keys=True)
-    # Device-supplied names must not inject terminal control sequences or new rows.
-    return "".join(char if char.isprintable() else repr(char)[1:-1] for char in str(value))
+_records = HardwareRecords("bluetooth")
+
+
+async def scan(timeout, stop_event=None, *, adapter=None, bus_factory=MessageBus, on_update=None, on_status=None):
+    """Return discovered devices using the shared WiGLE v1.6 fields."""
+    callback = (lambda record: on_update(_records.convert(record))) if on_update else None
+    native = await _scan(timeout, stop_event, adapter=adapter, bus_factory=bus_factory,
+                         on_update=callback, on_status=on_status)
+    return sorted((_records.convert(record) for record in native), key=wigle_sort_key)
 
 
 def format_results(records, json_output=False):
@@ -300,23 +302,7 @@ def format_results(records, json_output=False):
         return json.dumps(records, indent=2, ensure_ascii=True, allow_nan=False)
     if not records:
         return "No devices discovered."
-    rows = [["Name", "Address", "RSSI (dBm)", "Paired", "Connected"]]
-    for record in records:
-        props = record["properties"]
-        name = props.get("Name") or props.get("Alias")
-        rows.append([
-            display_value(name)[:32], display_value(props.get("Address")),
-            display_value(props.get("RSSI")), display_value(props.get("Paired")),
-            display_value(props.get("Connected")),
-        ])
-    widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
-    lines = ["  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip() for row in rows]
-    lines.append(f"\n{len(records)} device(s) observed. Available BlueZ properties (may include cached context):")
-    for record in records:
-        lines.append(f"\n{display_value(record['path'])}")
-        for key, value in sorted(record["properties"].items()):
-            lines.append(f"  {key}: {display_value(value)}")
-    return "\n".join(lines)
+    return format_table(records)
 
 
 def positive_timeout(value):

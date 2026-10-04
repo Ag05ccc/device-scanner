@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from device_scanner.server import MAX_BODY_BYTES, make_server
+from device_scanner.wigle import new_record
 
 
 class ServerTests(unittest.TestCase):
@@ -41,10 +42,12 @@ class ServerTests(unittest.TestCase):
         return {"node_id": "node-1", "scanner": "dummy", "kind": "heartbeat", **changes}
 
     def scan(self, **changes):
-        return self.heartbeat(kind="scan", radio="bluetooth", status="success",
-                              observed_at="2026-10-03T12:00:00Z",
-                              observations=[{"path": "/device/1", "properties": {"Name": "Örnek", "RSSI": -50}}],
-                              **changes)
+        record = new_record("02:00:00:00:00:01", "Örnek",
+                            "WIFI" if changes.get("radio") == "wifi" else "BLE")
+        record["RSSI"] = -50
+        report = self.heartbeat(kind="scan", radio="bluetooth", status="success",
+                                observed_at="2026-10-03T12:00:00Z", observations=[record])
+        return {**report, **changes}
 
     def test_heartbeat_registers_node_without_hiding_radio_waiting(self):
         self.assertEqual(self.request("/api/reports", self.heartbeat())[0], 200)
@@ -97,6 +100,21 @@ class ServerTests(unittest.TestCase):
                 self.assertEqual(self.request("/api/reports", report)[0], 400)
         self.assertEqual(self.request("/api/nodes")[1], {"nodes": []})
 
+    def test_invalid_wigle_fields_and_duplicates_are_rejected(self):
+        for changes in ({"Type": "WIFI"}, {"MAC": "invalid"}, {"Channel": 6},
+                        {"RSSI": True}, {"RSSI": "-50"}, {"Frequency": 1.5},
+                        {"FirstSeen": "2026-10-04T00:00:00Z"}, {"FirstSeen": "2026-02-30 00:00:00"},
+                        {"CurrentLatitude": 91, "CurrentLongitude": 0}, {"CurrentLatitude": 1},
+                        {"MfgrId": 65536}, {"RCOIs": "1234"}, {"extra": "old property"}):
+            report = self.scan()
+            report["observations"][0].update(changes)
+            with self.subTest(changes=changes):
+                self.assertEqual(self.request("/api/reports", report)[0], 400)
+        report = self.scan()
+        report["observations"] *= 2
+        self.assertEqual(self.request("/api/reports", report)[0], 400)
+        self.assertEqual(self.request("/api/nodes")[1], {"nodes": []})
+
     def test_malformed_or_oversize_json_is_rejected(self):
         for raw in (b"{", b"\xff", b'{"number":1e400}', b"[" * 2000 + b"]" * 2000):
             self.assertEqual(self.request("/api/reports", raw=raw)[0], 400)
@@ -115,7 +133,7 @@ class ServerTests(unittest.TestCase):
 
     def test_json_surrogate_property_can_be_returned_without_encoding_failure(self):
         report = self.scan()
-        report["observations"][0]["properties"]["Name"] = "\ud800"
+        report["observations"][0]["SSID"] = "\ud800"
         self.assertEqual(self.request("/api/reports", report)[0], 200)
         status, data = self.request("/api/nodes")
         self.assertEqual(status, 200)
@@ -126,8 +144,7 @@ class ServerTests(unittest.TestCase):
         reports = []
         for number in range(3):
             for radio in ("bluetooth", "wifi"):
-                report = self.scan()
-                report.update(node_id=f"node-{number}", radio=radio)
+                report = self.scan(node_id=f"node-{number}", radio=radio)
                 reports.append(report)
         with ThreadPoolExecutor(max_workers=6) as pool:
             codes = list(pool.map(lambda report: self.request("/api/reports", report)[0], reports))

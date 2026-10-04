@@ -22,10 +22,10 @@ frontend packages, build step, external fonts, analytics, or CDN requests.
 | `styles.css` | Theme variables, component styles, responsive layouts |
 | `js/app.js` | Selected Pi/radio/row, user events, coordinating the views |
 | `js/api.js` | Fetching `/api/nodes`, request timeout, refresh scheduling |
-| `js/observations.js` | Normalize reports, search, sort, count channels, collect history |
+| `js/observations.js` | Read WiGLE records, search, sort, count channels, collect history |
 | `js/nodes.js` | Pi navigation and status |
 | `js/results.js` | Results table and empty states |
-| `js/details.js` | Selected observation and original reported properties |
+| `js/details.js` | Selected observation and its complete WiGLE record |
 | `js/charts.js` | Signal history and channel/RSSI distribution SVGs |
 | `js/export.js` | Filtered JSON/CSV documents and browser downloads |
 | `js/ui.js` | Small DOM, text, time, and icon helpers |
@@ -48,8 +48,9 @@ summary refer to the selected Pi/radio before search and band filtering. The tab
 footer gives the filtered count. Online Pi count always covers the whole workspace.
 Scan errors count both radios within the selected Pi scope.
 
-Select a row to inspect it. **All reported properties** includes its original
-object path and properties. `/` focuses search; arrow keys move between focused
+Select a row to inspect it. **WiGLE record** shows its fourteen original fields.
+See the [shared data format](wigle.md) for names, units and missing values.
+`/` focuses search; arrow keys move between focused
 result buttons. All controls are keyboard accessible. Narrow layouts stack the
 panels; the Pi list and results table can scroll horizontally.
 
@@ -70,8 +71,9 @@ available.
 
 ## What the graphs and statuses mean
 
-- **Wi-Fi signal:** the scanner's `Strength` percentage. It is not converted to dBm.
-- **Bluetooth signal:** the reported RSSI in dBm. It does not estimate distance.
+- **Wi-Fi and Bluetooth signal:** the reported `RSSI` in dBm. Blank readings
+  display as Unknown. Signal bars scale dBm for display; they do not estimate
+  distance or claim a measured percentage.
 - **Signal history:** up to 60 samples per observation, collected only when a new
   radio report arrives during this browser session. Repeated polling of the same
   report does not invent samples. Missing/error/offline observations break the
@@ -99,13 +101,16 @@ inventory, floor map, IP assignment, or remote start/stop command is added.
 
 ## Export
 
-JSON and CSV contain the displayed rows in their displayed order, their original
-properties, reporting Pi, radio state, and filters. JSON also carries the snapshot
-time and an `outdated` flag; CSV repeats the flag and filters per row. Exporting an
-empty filter produces an empty JSON observation array or a header-only CSV.
-Device-supplied formula-like strings in CSV cells are escaped for spreadsheets.
-Exported timestamps refer to the last radio report, including when retained data
-is shown after an error.
+JSON and CSV contain the displayed rows in their displayed order. JSON includes
+each original WiGLE `record` together with the reporting Pi, radio state, filters,
+snapshot time and an `outdated` flag. CSV follows WiGLE v1.6: a metadata line,
+the exact fourteen-column header, and observation rows. It does not contain
+additional Pi or status columns. Empty filters produce an empty JSON observation
+array or a CSV with only its metadata and header lines.
+
+CSV preserves original text and numeric values with RFC4180 quoting. `FirstSeen`
+always describes the record's first discovery; JSON's `report_observed_at` dates
+the last radio report, including errors. Full details: [WiGLE format](wigle.md).
 
 ## Verification
 

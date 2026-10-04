@@ -14,6 +14,8 @@ import unittest
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from device_scanner.wigle import COLUMNS, validate_record
+
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -84,6 +86,12 @@ class DevelopmentTests(unittest.TestCase):
     def test_dev_launches_independent_nodes_and_cleans_up(self):
         dev, output = self.start("dev", "--port", str(self.port), "--interval", "0.1")
         self.wait_for(lambda: self.healthy(3), "three dummy nodes never became ready")
+        for node in self.nodes():
+            for radio, scan in node["radios"].items():
+                self.assertEqual(len(scan["observations"]), 1)
+                record = scan["observations"][0]
+                self.assertEqual(tuple(record), COLUMNS)
+                validate_record(record, radio)
         output.seek(0)
         children = dict((name, int(pid)) for name, pid in
                         re.findall(r"^(server|pi-\d+): PID (\d+)$", output.read(), re.MULTILINE))

@@ -18,7 +18,7 @@ function placeholder(container, message) {
 export function renderHistory(row, history, connected) {
   $("history-key").textContent = row ? row.nodeId : "Selected observation";
   $("history-subtitle").textContent = row
-    ? `${row.name} · ${row.radio === "wifi" ? "signal quality (%)" : "RSSI (dBm)"}${!connected ? " · outdated" : ""}`
+    ? `${row.name} · RSSI (dBm)${!connected ? " · outdated" : ""}`
     : "Select an observation to follow its signal";
   const container = $("history-chart");
   const samples = row ? history.get(row.id)?.samples || [] : [];
@@ -32,20 +32,14 @@ export function renderHistory(row, history, connected) {
     );
     return;
   }
-  const min =
-    row.radio === "wifi"
-      ? 0
-      : Math.min(-100, ...known.map((item) => item.value));
-  const max =
-    row.radio === "wifi"
-      ? 100
-      : Math.max(-20, ...known.map((item) => item.value));
+  const min = Math.min(-100, ...known.map((item) => item.value));
+  const max = Math.max(-20, ...known.map((item) => item.value));
   const first = samples[0].time;
   const span = Math.max(1000, samples.at(-1).time - first);
   const x = (sample) => 43 + ((sample.time - first) / span) * 457;
   const y = (sample) =>
     132 - Math.max(0, Math.min(1, (sample.value - min) / (max - min))) * 116;
-  const description = `${row.name}, ${known.length} received signal measurements. Latest: ${signalText(known.at(-1).value, row.radio)}.`;
+  const description = `${row.name}, ${known.length} received signal measurements. Latest: ${signalText(known.at(-1).value)}.`;
   const svg = chart(description);
   for (let index = 0; index <= 4; index++) {
     const height = 16 + index * 29;
@@ -93,7 +87,7 @@ export function renderHistory(row, history, connected) {
         svgElement(
           "title",
           {},
-          `${new Date(sample.time).toLocaleTimeString()} · ${signalText(sample.value, row.radio)}`,
+          `${new Date(sample.time).toLocaleTimeString()} · ${signalText(sample.value)}`,
         ),
       );
       svg.append(point);

@@ -17,17 +17,16 @@ export function bandOf(frequency) {
   return "unknown";
 }
 
-export function signalText(value, radio) {
-  return isNumber(value)
-    ? `${value}${radio === "wifi" ? "%" : " dBm"}`
-    : "Unknown";
+export function signalText(value) {
+  return isNumber(value) ? `${value} dBm` : "Unknown";
 }
 
-export function signalPercent(value, radio) {
+export function signalPercent(value) {
   if (!isNumber(value)) return 0;
   return Math.max(
     0,
-    Math.min(100, radio === "wifi" ? value : ((value + 100) / 70) * 100),
+    // Only the visual meter is scaled. The measurement stays in dBm.
+    Math.min(100, ((value + 100) / 70) * 100),
   );
 }
 
@@ -37,27 +36,27 @@ export function observations(nodes, radio, nodeId = "all") {
     if (nodeId !== "all" && node.node_id !== nodeId) continue;
     const scan = node.radios[radio];
     for (const record of scan.observations) {
-      const props = record.properties;
       const wifi = radio === "wifi";
-      const signal = wifi ? props.Strength : props.RSSI;
       rows.push({
-        id: JSON.stringify([node.node_id, radio, record.path]),
+        id: JSON.stringify([
+          node.node_id,
+          record.Type,
+          record.MAC.toUpperCase(),
+        ]),
         nodeId: node.node_id,
         scanner: node.scanner,
         radio,
         record,
         name: wifi
-          ? props.SSID === ""
+          ? record.SSID === ""
             ? "Hidden network"
-            : text(props.SSID) || "Unnamed network"
-          : text(props.Name) || text(props.Alias) || "Unnamed device",
-        address:
-          text(wifi ? props.BSSID || props.HwAddress : props.Address) ||
-          "Unknown",
-        signal: isNumber(signal) ? signal : null,
-        channel: isNumber(props.Channel) ? props.Channel : null,
-        band: wifi ? bandOf(props.Frequency) : "unknown",
-        security: text(props.Security) || "Unknown",
+            : record.SSID
+          : text(record.SSID) || "Unnamed device",
+        address: record.MAC,
+        signal: isNumber(record.RSSI) ? record.RSSI : null,
+        channel: isNumber(record.Channel) ? record.Channel : null,
+        band: wifi ? bandOf(record.Frequency) : "unknown",
+        security: text(record.AuthMode) || "Unknown",
         receivedAt: scan.received_at,
         observedAt: scan.observed_at,
         state: !node.online

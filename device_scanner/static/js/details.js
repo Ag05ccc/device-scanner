@@ -21,10 +21,7 @@ export function renderDetails(row, connected) {
       element("span", "state-badge"),
     );
     const raw = element("details", "raw-details");
-    raw.append(
-      element("summary", "", "All reported properties"),
-      element("pre"),
-    );
+    raw.append(element("summary", "", "WiGLE record"), element("pre"));
     container.replaceChildren(
       identity,
       element("dl", "detail-fields"),
@@ -45,25 +42,44 @@ export function renderDetails(row, connected) {
     .querySelector(".state-badge")
     .classList.toggle("previous", previous);
   const fields = container.querySelector(".detail-fields");
-  const props = row.record.properties;
+  const props = row.record;
   const entries = [
     ["Scanner", row.nodeId],
     ["Source", row.scanner === "dummy" ? "Dummy data" : "Real hardware"],
-    ["Signal", signalText(row.signal, row.radio)],
+    ["Signal", signalText(row.signal)],
   ];
   if (row.radio === "wifi") {
     entries.push(
       ["Channel", row.channel ?? "Unknown"],
       ["Band", row.band === "unknown" ? "Unknown" : `${row.band} GHz`],
+      ["Frequency (MHz)", valueText(props.Frequency)],
       ["Security", row.security],
+      ["Roaming consortium IDs", valueText(props.RCOIs)],
     );
   } else {
     entries.push(
-      ["Address type", valueText(props.AddressType)],
-      ["Paired", valueText(props.Paired)],
-      ["Connected", valueText(props.Connected)],
+      ["Type", props.Type],
+      ["Capabilities", props.AuthMode || "Unknown"],
+      [
+        "Device type code",
+        valueText(props.Frequency === "" ? null : props.Frequency),
+      ],
+      ["Manufacturer ID", valueText(props.MfgrId === "" ? null : props.MfgrId)],
     );
   }
+  entries.push(
+    ["First seen (UTC)", valueText(props.FirstSeen)],
+    [
+      row.scanner === "dummy" ? "Sample latitude" : "Latitude",
+      valueText(props.CurrentLatitude),
+    ],
+    [
+      row.scanner === "dummy" ? "Sample longitude" : "Longitude",
+      valueText(props.CurrentLongitude),
+    ],
+    ["Altitude (m)", valueText(props.AltitudeMeters)],
+    ["Accuracy (m)", valueText(props.AccuracyMeters)],
+  );
   // An error report's timestamp does not date its retained successful observations.
   entries.push(["Last radio report", ageText(row.receivedAt)]);
   entries.forEach(([label, value], index) => {
@@ -73,8 +89,11 @@ export function renderDetails(row, connected) {
       pair.append(element("dt", "", label), element("dd"));
       fields.append(pair);
     }
+    setText(pair.querySelector("dt"), label);
     setText(pair.querySelector("dd"), value);
   });
+  while (fields.children.length > entries.length)
+    fields.lastElementChild.remove();
   container.querySelector(".detail-error").hidden = !row.error;
   setText(container.querySelector(".detail-error"), row.error || "");
   setText(container.querySelector("pre"), JSON.stringify(row.record, null, 2));

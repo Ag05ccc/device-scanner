@@ -60,7 +60,7 @@ function renderMetrics() {
     `${view.nodeId === "all" ? "All scanners" : view.nodeId} · latest successful results`;
   $("signal-value").textContent =
     connected && strongest ? strongest.signal : "—";
-  $("signal-unit").textContent = view.radio === "wifi" ? "%" : "dBm";
+  $("signal-unit").textContent = connected && strongest ? "dBm" : "";
   $("signal-note").textContent =
     connected && strongest
       ? `${strongest.name} · ${strongest.nodeId}`

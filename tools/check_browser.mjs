@@ -9,6 +9,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { record } from "../tests/frontend/fixtures.js";
+import { WIGLE_COLUMNS } from "../device_scanner/static/js/export.js";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = await mkdtemp(path.join(os.tmpdir(), "scanner-browser-"));
 const children = [];
@@ -289,50 +292,38 @@ try {
     assert.equal(response.status, 200, await response.text());
   };
   const wifi = (index) => [
-    {
-      path: "/wifi/office",
-      properties: {
-        SSID: "Studio Network",
-        BSSID: "02:A4:32:80:11:01",
-        Strength: 90 - index * 8,
-        Frequency: 5180,
-        Channel: 36,
-        Security: "WPA2 Personal",
-      },
-    },
-    {
-      path: "/wifi/guest",
-      properties: {
-        SSID: "Studio Guest",
-        BSSID: `02:A4:32:80:12:0${index}`,
-        Strength: 65 - index * 5,
-        Frequency: 2437,
-        Channel: 6,
-        Security: "WPA2 Personal",
-      },
-    },
-    {
-      path: "/wifi/lab",
-      properties: {
-        SSID: "Lab · 6 GHz",
-        BSSID: `02:A4:32:80:13:0${index}`,
-        Strength: 55 - index * 3,
-        Frequency: 5955,
-        Channel: 1,
-        Security: "WPA3 Personal",
-      },
-    },
-    {
-      path: "/wifi/hidden",
-      properties: {
-        SSID: "",
-        BSSID: `02:A4:32:80:14:0${index}`,
-        Strength: 28 + index,
-        Frequency: 2462,
-        Channel: 11,
-        Security: "Open",
-      },
-    },
+    record({
+      SSID: "Studio Network",
+      MAC: "02:A4:32:80:11:01",
+      RSSI: -30 - index * 8,
+      Frequency: 5180,
+      Channel: 36,
+      AuthMode: "[WPA2-PSK-CCMP][ESS]",
+    }),
+    record({
+      SSID: "Studio Guest",
+      MAC: `02:A4:32:80:12:0${index}`,
+      RSSI: -55 - index * 5,
+      Frequency: 2437,
+      Channel: 6,
+      AuthMode: "[WPA2-PSK-CCMP][ESS]",
+    }),
+    record({
+      SSID: "Lab · 6 GHz",
+      MAC: `02:A4:32:80:13:0${index}`,
+      RSSI: -65 - index * 3,
+      Frequency: 5955,
+      Channel: 1,
+      AuthMode: "[WPA2-SAE-CCMP][ESS]",
+    }),
+    record({
+      SSID: "",
+      MAC: `02:A4:32:80:14:0${index}`,
+      RSSI: -90 + index,
+      Frequency: 2462,
+      Channel: 11,
+      AuthMode: "[ESS]",
+    }),
   ];
   const sendScan = (nodeId, radio, observations) =>
     post(nodeId, {
@@ -345,17 +336,16 @@ try {
   for (let i = 1; i <= 3; i++) {
     await sendScan(`pi-0${i}`, "wifi", wifi(i));
     await sendScan(`pi-0${i}`, "bluetooth", [
-      {
-        path: "/bluetooth/beacon",
-        properties: {
-          Name: `Room ${i} beacon`,
-          Address: `02:BB:CC:DD:EE:0${i}`,
-          RSSI: -40 - i * 10,
-          AddressType: "public",
-          Paired: false,
-          Connected: false,
-        },
-      },
+      record({
+        SSID: `Room ${i} beacon`,
+        MAC: `02:BB:CC:DD:EE:0${i}`,
+        RSSI: -40 - i * 10,
+        Type: "BLE",
+        Channel: 0,
+        Frequency: 7936,
+        AuthMode: "Misc [BLE]",
+        MfgrId: 72,
+      }),
     ]);
   }
   heartbeatTimer = setInterval(async () => {
@@ -443,7 +433,10 @@ try {
     ),
     "utf8",
   );
-  assert.equal(csv.trim().split("\r\n").length, 4);
+  assert.equal(csv.trim().split("\r\n").length, 5);
+  assert.ok(csv.startsWith("WigleWifi-1.6,"));
+  assert.equal(csv.split("\r\n")[1], WIGLE_COLUMNS.join(","));
+  assert.deepEqual(Object.keys(exported.observations[0].record), WIGLE_COLUMNS);
   pass("JSON and CSV downloads contain exactly the filtered rows");
 
   await evaluate(
@@ -476,11 +469,11 @@ try {
     "Array.from(document.querySelectorAll('#results tr')).map(row => row.dataset.key)",
   );
   const updated = wifi(1);
-  updated[0].properties.Strength = 15;
+  updated[0].RSSI = -95;
   await sendScan("pi-01", "wifi", updated);
   await untilPage(
     session,
-    "document.querySelector('#results tr .signal-reading').textContent === '15%'",
+    "document.querySelector('#results tr .signal-reading').textContent === '-95 dBm'",
     "updated signal",
   );
   assert.deepEqual(
@@ -513,7 +506,7 @@ try {
   await click(session, "#refresh");
   await untilPage(
     session,
-    "Array.from(document.querySelectorAll('#results .signal-reading')).some(el => el.textContent === '82%')",
+    "Array.from(document.querySelectorAll('#results .signal-reading')).some(el => el.textContent === '-38 dBm')",
     "restored signal",
   );
   await click(session, "#sort-now");
@@ -546,14 +539,14 @@ try {
 
   const malicious = '<img src=x onerror="window.__unsafe=1">';
   await sendScan("pi-01", "bluetooth", [
-    {
-      path: "/bt/unsafe",
-      properties: {
-        Name: malicious,
-        RSSI: -60,
-        Extra: { original: "preserved" },
-      },
-    },
+    record({
+      SSID: malicious,
+      MAC: "02:BB:CC:DD:EE:01",
+      RSSI: -60,
+      Type: "BLE",
+      Channel: 0,
+      AuthMode: "Misc [BLE] preserved",
+    }),
   ]);
   await click(session, "#refresh");
   await click(session, "#radio-bluetooth");

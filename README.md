@@ -79,7 +79,7 @@ Gerçek tarama Linux üzerinde çalışan BlueZ ve NetworkManager servislerini k
 
 ```bash
 sudo apt-get update
-sudo apt-get install --no-install-recommends python3-venv bluez network-manager
+sudo apt-get install --no-install-recommends python3-venv bluez network-manager iw
 cd ~/device-scanner
 python3 -m venv .venv
 .venv/bin/python -m pip install --only-binary=:all: -r requirements-pi.txt
@@ -106,6 +106,7 @@ Wi-Fi için `--radios wifi --wifi-interface wlan0` kullanılabilir. Wi-Fi tarama
 - `device_scanner/static/styles.css`: görünüm, açık/koyu tema ve mobil düzen.
 - `device_scanner/static/js/`: API, filtreleme, Pi listesi, sonuçlar, ayrıntılar ve grafikler için küçük JavaScript modülleri.
 - `device_scanner/node.py`: heartbeat, tarama döngüleri ve HTTP gönderimi.
+- `device_scanner/wigle.py`: ortak WiGLE alanları, doğrulama ve gerçek donanım verisi dönüşümü.
 - `device_scanner/scanners/`: dummy ve gerçek tarayıcılar.
 - `device_scanner/dev.py`: ayrı server/node süreçlerini başlatma ve kapatma.
 
@@ -113,9 +114,17 @@ Gerçek Bluetooth/Wi-Fi sürücüleri mevcut `bakici-app` projesindeki tarayıc�
 
 API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`. Arayüz görünürken iki saniyede, arka planda on saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama süresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz.
 
+## Ortak WiGLE veri biçimi
+
+Dummy ve gerçek Pi'ler aynı [WiGLE v1.6](https://api.wigle.net/csvFormat.html) alanlarını gönderir. Her gözlem doğrudan `MAC`, `SSID`, `AuthMode`, `FirstSeen`, `Channel`, `Frequency`, `RSSI`, `CurrentLatitude`, `CurrentLongitude`, `AltitudeMeters`, `AccuracyMeters`, `RCOIs`, `MfgrId`, `Type` alanlarını içerir. Eski `path/properties` yapısı kaldırılmıştır. Pi kimliği ve radyo bilgisi JSON raporunun dış kısmında kalır.
+
+Her iki radyoda sinyal dBm'dir; Wi-Fi yüzdesi dBm'e çevrilmez. Gerçek Wi-Fi RSSI değeri `iw` tarama önbelleğinden okunur; erişilemiyorsa boş kalır. Gerçek cihazlarda GPS kaynağı olmadığı için konum alanları boştur. Dummy konumlar örnektir. `FirstSeen` UTC'dir ve aynı node süreci boyunca sabit kalır. Bluetooth için `Frequency` MHz değil, cihaz sınıf kodudur.
+
+Bu değişiklikten sonra server ve tüm node'ları birlikte güncelleyip yeniden başlat; ardından tarayıcıyı yenile. Alan açıklamaları, örnek rapor ve donanım sınırlamaları: [WiGLE data format](docs/wigle.md).
+
 ## Yeni analiz panosu
 
-Pano, `bakici-app` Pi seçimi/ayrıntı düzeninden ve [Acrylic Wi-Fi Analyzer](https://www.acrylicwifi.com/en/wifi-analyzer/) uygulamasının tablo, sinyal ve kanal görünümlerinden esinlenir. İngilizce arayüz; Pi seçimi, Bluetooth/Wi-Fi geçişi, ad/adres araması, Wi-Fi bant filtresi, sıralama, JSON/CSV dışa aktarma ve açık/koyu tema sunar. Bir satır seçildiğinde tüm özgün tarama özellikleri incelenebilir.
+Pano, `bakici-app` Pi seçimi/ayrıntı düzeninden ve [Acrylic Wi-Fi Analyzer](https://www.acrylicwifi.com/en/wifi-analyzer/) uygulamasının tablo, sinyal ve kanal görünümlerinden esinlenir. İngilizce arayüz; Pi seçimi, Bluetooth/Wi-Fi geçişi, ad/adres araması, Wi-Fi bant filtresi, sıralama, JSON/CSV dışa aktarma ve açık/koyu tema sunar. Bir satır seçildiğinde WiGLE kaydının tamamı incelenebilir. CSV dosyası WiGLE v1.6 biçimindedir; JSON ayrıca Pi, filtre ve durum bilgisini saklar.
 
 Sinyal grafiği yalnız tarayıcı açıkken gelen yeni raporlardan oluşur; son 60 ölçümü tutar. Kanal grafiği filtrelenen güncel başarılı sonuçlarda aynı BSSID'yi kanal/bant başına bir kez sayar; kanal doluluk oranı veya parazit ölçmez. Tablo her Pi'nin gözlemini ayrı tutar. Hatalı/çevrimdışı Pi'lerin önceki verileri işaretlenir; sunucu kesilirse son görünüm eski olarak gösterilir.
 

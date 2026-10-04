@@ -1,4 +1,22 @@
 // Exports describe exactly the visible rows, including retained/offline results.
+// WiGLE v1.6 order; kept in sync with device_scanner/wigle.py by contract tests.
+export const WIGLE_COLUMNS = [
+  "MAC",
+  "SSID",
+  "AuthMode",
+  "FirstSeen",
+  "Channel",
+  "Frequency",
+  "RSSI",
+  "CurrentLatitude",
+  "CurrentLongitude",
+  "AltitudeMeters",
+  "AccuracyMeters",
+  "RCOIs",
+  "MfgrId",
+  "Type",
+];
+
 export function exportDocument(rows, view, connected, receivedAt) {
   return {
     exported_at: new Date().toISOString(),
@@ -20,49 +38,40 @@ export function exportDocument(rows, view, connected, receivedAt) {
       received_at: row.receivedAt,
       report_observed_at: row.observedAt,
       error: row.error,
-      path: row.record.path,
-      properties: row.record.properties,
+      record: row.record,
     })),
   };
 }
 
 function csvCell(value) {
-  let text =
-    value == null
-      ? ""
-      : typeof value === "object"
-        ? JSON.stringify(value)
-        : String(value);
-  // Spreadsheet applications may execute device-supplied text as formulas.
-  if (/^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
-  return `"${text.replaceAll('"', '""')}"`;
+  const text = value == null ? "" : String(value);
+  // Preserve measurements and names exactly for WiGLE; RFC4180 escaping.
+  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
 export function toCsv(document) {
-  const columns = [
-    "node_id",
-    "scanner",
-    "radio",
-    "state",
-    "outdated",
-    "received_at",
-    "report_observed_at",
-    "error",
-    "path",
-    "properties",
-    "filters",
+  const scanners = [
+    ...new Set(document.observations.map((row) => row.node_id)),
+  ];
+  const preheader = [
+    "WigleWifi-1.6",
+    "appRelease=development",
+    "model=",
+    "release=",
+    `device=${scanners.length === 1 ? scanners[0] : "multiple"}`,
+    "display=Device Scanner",
+    "board=",
+    "brand=",
+    "star=Sol",
+    "body=3",
+    "subBody=0",
   ];
   return (
     [
-      columns,
+      preheader,
+      WIGLE_COLUMNS,
       ...document.observations.map((row) =>
-        columns.map((column) =>
-          column === "outdated"
-            ? document.outdated
-            : column === "filters"
-              ? document.filters
-              : row[column],
-        ),
+        WIGLE_COLUMNS.map((column) => row.record[column]),
       ),
     ]
       .map((values) => values.map(csvCell).join(","))
