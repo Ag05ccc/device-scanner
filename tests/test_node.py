@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import random
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -9,11 +10,13 @@ from device_scanner.wigle import COLUMNS, new_record, validate_record
 
 
 class NodeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_dummy_is_deterministic_and_separates_nodes(self):
+    async def test_dummy_preserves_identity_and_separates_nodes(self):
         first = await dummy.scan(0.001, node_id="pi-1", radio="bluetooth")
         again = await dummy.scan(0.001, node_id="pi-1", radio="bluetooth")
         second = await dummy.scan(0.001, node_id="pi-2", radio="bluetooth")
-        self.assertEqual(first, again)
+        stable_fields = set(COLUMNS) - {"RSSI", "AccuracyMeters"}
+        self.assertEqual({key: first[0][key] for key in stable_fields},
+                         {key: again[0][key] for key in stable_fields})
         self.assertNotEqual(first[0]["MAC"], second[0]["MAC"])
         wifi = await dummy.scan(0.001, node_id="pi-1", radio="wifi")
         for radio, records in (("wifi", wifi), ("bluetooth", first)):
@@ -24,6 +27,30 @@ class NodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first[0]["Type"], "BLE")
         self.assertEqual(wifi[0]["Type"], "WIFI")
         self.assertEqual(wifi[0]["CurrentLatitude"], first[0]["CurrentLatitude"])
+
+    async def test_dummy_measurements_vary_without_changing_device_or_schema(self):
+        # A fixed random stream makes the regression repeatable, not probabilistic.
+        with patch.object(dummy, "_random", random.Random(42)), patch.object(dummy, "_signal_drift", {}):
+            for radio in ("wifi", "bluetooth"):
+                records = [(await dummy.scan(0.0001, node_id="pi-noise", radio=radio))[0]
+                           for _ in range(80)]
+                with self.subTest(radio=radio):
+                    self.assertGreater(len({record["RSSI"] for record in records}), 20)
+                    self.assertGreater(len({record["AccuracyMeters"] for record in records}), 1)
+                    stable_fields = set(COLUMNS) - {"RSSI", "AccuracyMeters"}
+                    expected = {key: records[0][key] for key in stable_fields}
+                    for record in records:
+                        validate_record(record, radio)
+                        self.assertTrue(-100 <= record["RSSI"] <= -25)
+                        self.assertTrue(2.5 <= record["AccuracyMeters"] <= 4.4)
+                        self.assertEqual({key: record[key] for key in stable_fields}, expected)
+
+    def test_dummy_signal_includes_fades_and_recovers(self):
+        with patch.object(dummy, "_signal_drift", {}), patch.object(dummy, "_random") as noise:
+            noise.uniform.side_effect = [0, 0, 12, 0, 0]
+            noise.random.side_effect = [0.01, 0.5]
+            self.assertEqual(dummy.noisy_signal(("pi-1", "wifi"), -60), -72)
+            self.assertEqual(dummy.noisy_signal(("pi-1", "wifi"), -60), -60)
 
     async def test_dummy_stop_returns_no_partial_observations(self):
         stop = asyncio.Event()

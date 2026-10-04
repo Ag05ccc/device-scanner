@@ -100,6 +100,13 @@ on a small grid near (0, 0), plus sample altitude, accuracy and manufacturer
 data. The inspector labels these as dummy data and sample coordinates. Each
 dummy Pi still reports one Wi-Fi network and one BLE device.
 
+Dummy measurements change on each scan: RSSI has gradual random drift, small
+jitter and an 8% chance of a temporary 8–18 dB fade. Readings are limited to
+−100 through −25 dBm. Location accuracy varies by up to 0.5 meters around its
+sample value. Each Pi/radio maintains its own signal drift. Device addresses,
+names, channels, coordinates and `FirstSeen` stay stable so the dashboard can
+track the same observations over time. Restart dummy nodes to use these changes.
+
 ## Saving files from the dashboard
 
 **Export → CSV** saves a local file using the `WigleWifi-1.6` metadata line,

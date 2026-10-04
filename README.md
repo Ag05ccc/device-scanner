@@ -28,6 +28,8 @@ Node sayısını veya portu değiştirmek için:
 
 Her node ayrı bir işletim sistemi sürecidir. Başlangıçta yazılan PID'lerden birini `kill PID` ile durdurabilirsin: diğer node'lar çalışmaya devam eder. Varsayılan geliştirme ayarlarında duran node yaklaşık 6 saniye sonra çevrimdışı görünür. Bu ortam Pi işletim sistemini veya radyo donanımını taklit etmez; aynı uygulama kodunun çoklu cihaz davranışını çalıştırır.
 
+Dummy Wi-Fi ve Bluetooth sinyalleri her taramada küçük rastgele değişimler ve ara sıra daha belirgin düşüşler üretir. RSSI −100 ile −25 dBm arasında kalır; örnek konum doğruluğu da hafifçe değişir. Cihaz kimlikleri ve `FirstSeen` sabit kaldığından sinyal grafiğini aynı cihaz üzerinde izleyebilirsin.
+
 ## Süreçleri ayrı terminallerde çalıştır
 
 Her terminalde proje klasörüne geç. Önce server:

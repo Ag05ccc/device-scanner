@@ -2,12 +2,26 @@
 
 import asyncio
 import hashlib
+import random
 
 from ..wigle import utc_timestamp, validate_record
 
 
 # FirstSeen describes first discovery in this process, not the latest scan time.
 _first_seen = {}
+_signal_drift = {}
+_random = random.Random()
+
+
+def noisy_signal(key, baseline):
+    """Simulate slow drift, small measurement jitter, and occasional fading."""
+    drift = _signal_drift.get(key, 0) * 0.85 + _random.uniform(-3, 3)
+    drift = max(-10, min(10, drift))
+    _signal_drift[key] = drift
+    signal = baseline + drift + _random.uniform(-2, 2)
+    if _random.random() < 0.08:
+        signal -= _random.uniform(8, 18)
+    return round(max(-100, min(-25, signal)), 1)
 
 
 async def scan(timeout, stop_event=None, *, node_id, radio):
@@ -37,11 +51,11 @@ async def scan(timeout, stop_event=None, *, node_id, radio):
         "Channel": 6 if wifi else 0,
         # WiGLE overloads Frequency for Bluetooth: this is a device-type code.
         "Frequency": 2437 if wifi else 7936,
-        "RSSI": -40 - digest[5] % 40,
+        "RSSI": noisy_signal((node_id, radio), -40 - digest[5] % 40),
         "CurrentLatitude": round(0.01 + int.from_bytes(position[:2]) / 65535 * 0.01, 6),
         "CurrentLongitude": round(0.01 + int.from_bytes(position[2:4]) / 65535 * 0.01, 6),
         "AltitudeMeters": 10 + position[4] % 20,
-        "AccuracyMeters": round(3 + position[5] % 10 / 10, 1),
+        "AccuracyMeters": round(3 + position[5] % 10 / 10 + _random.uniform(-0.5, 0.5), 1),
         "RCOIs": "",
         "MfgrId": "" if wifi else 72,
         "Type": "WIFI" if wifi else "BLE",
