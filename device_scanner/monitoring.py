@@ -7,6 +7,25 @@ import copy
 RETENTION_SECONDS = 15 * 60
 NEW_SECONDS = 10 * 60
 MAX_HISTORY = 10_000
+MAX_SCAN_TICKS = 11
+
+
+def scan_rate(ticks, *, now, available):
+    """Measured success receipt frequency over at most ten complete intervals.
+
+    No polling/heartbeat/configured rate is substituted for a measurement.
+    A missed expected arrival suppresses the old average instead of leaving a
+    frozen positive value, and errors preserve the window for later recovery.
+    """
+    samples = max(0, len(ticks) - 1)
+    span = ticks[-1] - ticks[0] if samples else None
+    rate = None
+    if span is not None and span > 0:
+        mean_interval = span / samples
+        if available and now - ticks[-1] <= max(2 * mean_interval, 2):
+            rate = samples / span
+    return {"scan_rate_hz": rate, "scan_rate_samples": samples,
+            "scan_rate_window_seconds": span}
 
 
 class ObservationHistory:

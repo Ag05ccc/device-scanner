@@ -91,6 +91,124 @@ class MonitoringTests(unittest.TestCase):
         self.now += 30
         self.assertEqual(self.radio()["freshness"], "stale")
 
+    def test_scan_rate_counts_success_intervals_not_heartbeats_polls_or_devices(self):
+        self.heartbeat(enabled_radios=["wifi"], expected_cycle_seconds={"wifi": 90})
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.assertEqual(self.radio()["scan_rate_samples"], 0)
+        self.assertIsNone(self.radio()["scan_rate_window_seconds"])
+        self.scan([record(number) for number in range(50)])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        # Two complete empty scans still represent two successful completions.
+        self.scan([])  # A duplicate clock tick cannot create a zero interval.
+        self.assertEqual(self.radio()["scan_rate_samples"], 0)
+        self.now += 2
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], .5)
+        self.assertEqual(self.radio()["scan_rate_window_seconds"], 2)
+        self.assertEqual(self.radio()["scan_rate_samples"], 1)
+        self.now += 1
+        self.heartbeat()
+        for _ in range(5):
+            self.assertEqual(self.radio()["scan_rate_hz"], .5)
+            self.assertEqual(self.radio()["scan_rate_samples"], 1)
+        self.now += 1
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], .5)
+        self.assertEqual(self.radio()["scan_rate_samples"], 2)
+        self.assertEqual(self.radio()["scan_rate_window_seconds"], 4)
+        self.assertNotIn("_scan_ticks", self.radio())
+
+    def test_scan_rate_is_independent_for_each_radio_and_pi(self):
+        self.scan([])
+        self.scan([], radio="bluetooth")
+        self.scan([], node_id="pi-2")
+        self.now += .25
+        self.scan([])
+        self.now += .25
+        self.scan([], radio="bluetooth")
+        self.now += .5
+        self.scan([], node_id="pi-2")
+        self.assertEqual(self.radio()["scan_rate_hz"], 4)
+        self.assertEqual(self.radio(radio="bluetooth")["scan_rate_hz"], 2)
+        self.assertEqual(self.radio("pi-2")["scan_rate_hz"], 1)
+
+    def test_scan_rate_suppresses_overdue_error_and_offline_without_inventing_zero(self):
+        self.scan([])
+        self.now += 1
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], 1)
+        self.now += 2
+        self.heartbeat()
+        self.assertEqual(self.radio()["scan_rate_hz"], 1)
+        self.now += .01
+        self.assertEqual(self.radio()["freshness"], "fresh")
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.assertEqual(self.radio()["scan_rate_samples"], 1)
+        self.assertEqual(self.radio()["scan_rate_window_seconds"], 1)
+        self.scan(error="No adapter")
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.assertEqual(self.radio()["scan_rate_samples"], 1)
+        self.now += .99
+        self.scan([])
+        # Recovery includes the actual missing time; no invented error samples.
+        self.assertEqual(self.radio()["scan_rate_hz"], .5)
+        self.assertEqual(self.radio()["scan_rate_samples"], 2)
+        self.assertEqual(self.radio()["scan_rate_window_seconds"], 4)
+        self.now += 10
+        self.assertFalse(self.server.snapshot()["nodes"][0]["online"])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+
+    def test_scan_rate_stale_radio_remains_unavailable_despite_live_heartbeat(self):
+        self.scan([])
+        self.now += 20
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], .05)
+        self.now += 30
+        self.heartbeat()
+        self.assertTrue(self.server.snapshot()["nodes"][0]["online"])
+        self.assertEqual(self.radio()["freshness"], "stale")
+        # The sample-derived overdue threshold is 40 s, so freshness alone gates this.
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+
+    def test_scan_rate_resets_after_disable_reenable_and_scanner_mode_change(self):
+        self.heartbeat(enabled_radios=["wifi"])
+        self.scan([])
+        self.now += 1
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], 1)
+        self.heartbeat(enabled_radios=[])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.assertEqual(self.radio()["scan_rate_samples"], 0)
+        self.heartbeat(enabled_radios=["wifi"])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.now += 1
+        self.scan([])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.now += 2
+        self.scan([])
+        self.assertEqual(self.radio()["scan_rate_hz"], .5)
+        self.heartbeat(scanner="real", enabled_radios=["wifi"])
+        self.assertIsNone(self.radio()["scan_rate_hz"])
+        self.assertEqual(self.radio()["scan_rate_samples"], 0)
+        self.scan([], scanner="real")
+        self.now += 4
+        self.scan([], scanner="real")
+        self.assertEqual(self.radio()["scan_rate_hz"], .25)
+        self.assertEqual(self.radio()["scan_rate_samples"], 1)
+
+    def test_scan_rate_uses_at_most_ten_recent_intervals(self):
+        self.scan([])
+        self.now += 100
+        self.scan([])
+        for _ in range(10):
+            self.now += .5
+            self.scan([])
+        rate = self.radio()
+        self.assertEqual(rate["scan_rate_samples"], 10)
+        self.assertEqual(rate["scan_rate_window_seconds"], 5)
+        self.assertEqual(rate["scan_rate_hz"], 2)
+        self.assertEqual(len(self.server.nodes["pi-1"]["radios"]["wifi"]["_scan_ticks"]), 11)
+
     def test_global_baseline_new_identity_and_repeated_source_are_consistent(self):
         self.scan([record(1)])
         self.assertFalse(self.radio()["recent_observations"][0]["is_new"])

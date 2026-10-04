@@ -46,6 +46,28 @@ tab is hidden. Poll requests time out after four seconds and never overlap.
 During an outage the last snapshot remains visible with unknown freshness;
 current summary values become unavailable and reconnection is automatic.
 
+## Measured scan rate
+
+The compact **Tarama hızı / Pi** indicator stays visible across views. It reports
+Wi-Fi and Bluetooth separately in **Hz (successful scans per second)**, using the
+arithmetic mean of available Pi rates. Adding Pis does not multiply their scan
+speed. Partial measurements show their available/expected radio count. The Sensors
+table shows each source's own Hz and reciprocal `sn/tarama` period; 0.25 Hz means
+one successful scan every four seconds.
+
+The server uses monotonic receipt times for at most eleven successful reports
+(ten intervals). `scan_rate_hz = intervals / elapsed_seconds`; even an empty
+successful scan counts once. Heartbeats, failed reports, device counts and browser
+polls do not add samples. The API also provides `scan_rate_samples` and
+`scan_rate_window_seconds`. At least two distinct receipt times are needed.
+
+The Hz field becomes null on error, stale/disabled radio, offline Pi, or a gap
+longer than `max(2 × measured mean period, 2 seconds)`. Historical sample count and
+window remain available, but the UI does not present their rate as current. Radio
+enablement and scanner-mode changes reset the measurement. This is the cadence
+observed at the server, including delivery delays, not a configured target, radio
+carrier frequency, or browser FPS. `js/rates.js` handles display and aggregation.
+
 ## Counts and floor meaning
 
 The device key is **radio family + uppercase MAC**. Wi-Fi BSSIDs and Bluetooth

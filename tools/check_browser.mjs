@@ -245,6 +245,26 @@ const selectedSource = (session) =>
     session,
     "document.querySelector('#device-sources [aria-pressed=true]')?.dataset.sourceId",
   );
+const hasMeasuredRate = (value) =>
+  typeof value === "string" &&
+  /^\d+(?:[.,]\d+)?\s*Hz$/.test(value.trim()) &&
+  Number.parseFloat(value.replace(",", ".")) > 0;
+async function scanRates(session) {
+  return evaluate(
+    session,
+    `({
+    wifi: document.getElementById('scan-rate-wifi')?.textContent,
+    bluetooth: document.getElementById('scan-rate-bluetooth')?.textContent,
+    sensors: Array.from(document.querySelectorAll('#nodes tr[data-node-id]')).flatMap(row =>
+      ['wifi', 'bluetooth'].map(radio => ({
+        nodeId: row.dataset.nodeId,
+        radio,
+        rate: row.querySelector('.sensor-' + radio + ' .sensor-rate-value')?.textContent,
+        period: row.querySelector('.sensor-' + radio + ' .sensor-rate-period')?.textContent,
+      }))),
+  })`,
+  );
+}
 
 let heartbeatTimer;
 let fixtureFailure;
@@ -311,6 +331,8 @@ try {
   );
   assert.equal(await text(session, "#summary-wifi"), "—");
   assert.equal(await text(session, "#summary-bluetooth"), "—");
+  assert.equal(await text(session, "#scan-rate-wifi"), "—");
+  assert.equal(await text(session, "#scan-rate-bluetooth"), "—");
   assert.equal(await rowCount(session), 0);
   assert.equal(
     await evaluate(session, "document.getElementById('view-sensors').hidden"),
@@ -434,6 +456,11 @@ try {
     await text(session, '#floor-summaries [data-floor="2"] .wifi-value'),
     "— Wi-Fi",
   );
+  const firstRates = await scanRates(session);
+  assert.equal(firstRates.wifi, "—");
+  assert.equal(firstRates.bluetooth, "—");
+  assert.equal(firstRates.sensors.length, 2);
+  for (const reading of firstRates.sensors) assert.equal(reading.rate, "—");
   pass(
     "Successful empty scans show zero, distinct from an unobserved building",
   );
@@ -495,6 +522,24 @@ try {
   );
   pass(
     "Overview deduplicates three-Pi Wi-Fi and BT/BLE readings; demo data is explicit",
+  );
+  await until(async () => {
+    const rates = await scanRates(session);
+    return (
+      hasMeasuredRate(rates.wifi) &&
+      hasMeasuredRate(rates.bluetooth) &&
+      rates.sensors.length === 6 &&
+      rates.sensors.every((reading) => hasMeasuredRate(reading.rate))
+    );
+  }, "scan rates measured from successive successful reports");
+  const measuredRates = await scanRates(session);
+  for (const reading of measuredRates.sensors) {
+    assert.match(reading.period, /\d+(?:[.,]\d+)?\s*(?:sn|saniye|s)\b/);
+  }
+  assert.match(await text(session, "#scan-rate-note"), /ortalama/i);
+  await screenshot(session, "/tmp/device-scanner-scan-rates.png");
+  pass(
+    "Scan Hz stays unknown after the first report, then shows measured rates and per-radio periods",
   );
 
   for (const [width, height] of [
@@ -782,6 +827,7 @@ try {
   );
   assert.equal(JSON.parse(await readFile(placementsFile, "utf8"))["pi-02"], 1);
   await screenshot(session, "/tmp/device-scanner-oneshot-sensors.png");
+  await screenshot(session, "/tmp/device-scanner-scan-rates-sensors.png");
   await cdp("Page.reload", {}, session);
   await untilPage(
     session,
@@ -869,6 +915,24 @@ try {
     await text(session, '#nodes tr[data-node-id="pi-03"]'),
     /Wi-Fi adapter unavailable/,
   );
+  const errorRates = await scanRates(session);
+  assert.equal(
+    errorRates.sensors.find(
+      (reading) => reading.nodeId === "pi-03" && reading.radio === "wifi",
+    ).rate,
+    "—",
+  );
+  assert.ok(
+    hasMeasuredRate(
+      errorRates.sensors.find(
+        (reading) =>
+          reading.nodeId === "pi-03" && reading.radio === "bluetooth",
+      ).rate,
+    ),
+  );
+  assert.ok(hasMeasuredRate(errorRates.wifi));
+  assert.ok(hasMeasuredRate(errorRates.bluetooth));
+  assert.match(await text(session, "#scan-rate-note"), /kısmi|2\s*\/\s*3/i);
   pass(
     "A live heartbeat does not hide a radio error or invent observations on the affected floor",
   );
@@ -959,6 +1023,8 @@ try {
   );
   assert.equal(await text(session, "#summary-wifi"), "—");
   assert.equal(await text(session, "#summary-bluetooth"), "—");
+  assert.equal(await text(session, "#scan-rate-wifi"), "—");
+  assert.equal(await text(session, "#scan-rate-bluetooth"), "—");
   assert.equal(await rowCount(session), 14);
   await setField(session, "device-status", "unknown");
   assert.equal(await rowCount(session), 14);
@@ -979,6 +1045,10 @@ try {
     "document.getElementById('connection-banner').hidden && document.getElementById('summary-wifi').textContent === '10'",
     "server reconnect",
   );
+  await until(async () => {
+    const rates = await scanRates(session);
+    return hasMeasuredRate(rates.wifi) && hasMeasuredRate(rates.bluetooth);
+  }, "scan rates resume after server reconnect");
   await setField(session, "device-search", "Ofis Ağı");
   await click(session, "#device-rows tr:first-child button");
   await click(session, '#device-sources [data-source-id*="pi-01"]');
@@ -1089,6 +1159,13 @@ try {
     await text(session, '#device-sources [data-source-id*="pi-01"]'),
     /Demo/,
   );
+  const realRates = await scanRates(session);
+  assert.equal(
+    realRates.sensors.find(
+      (reading) => reading.nodeId === "pi-01" && reading.radio === "wifi",
+    ).rate,
+    "—",
+  );
   await click(session, "#device-close");
   pass(
     "Switching a Pi from demo to real clears its old records and signal history before new measurements",
@@ -1103,7 +1180,7 @@ try {
   );
   assert.equal(fixtureFailure, undefined);
   console.log(
-    `\n${checks.length} browser checks passed. Screenshots: /tmp/device-scanner-oneshot-{overview,dark,drawer,sensors,analysis}.png`,
+    `\n${checks.length} browser checks passed. Screenshots: /tmp/device-scanner-oneshot-{overview,dark,drawer,sensors,analysis}.png and /tmp/device-scanner-scan-rates{,-sensors}.png`,
   );
 } finally {
   clearInterval(heartbeatTimer);

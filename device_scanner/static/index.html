@@ -106,7 +106,17 @@
             Görülen cihazlar, katlar ve gözlem durumu.
           </p>
         </div>
-        <span id="last-observation" class="subtle"></span>
+        <div class="scan-telemetry" aria-label="Ölçülen tarama hızı">
+          <div class="scan-rate-summary">
+            <span class="scan-rate-label">Tarama hızı / Pi</span>
+            <span>Wi-Fi <strong id="scan-rate-wifi">—</strong></span>
+            <span>Bluetooth <strong id="scan-rate-bluetooth">—</strong></span>
+          </div>
+          <div class="scan-telemetry-note">
+            <span id="scan-rate-note">Ölçülüyor</span
+            ><span id="last-observation"></span>
+          </div>
+        </div>
       </div>
       <p id="demo-banner" class="demo-banner" hidden></p>
       <p id="connection-banner" class="notice" role="alert" hidden></p>
@@ -441,7 +451,7 @@
           <div class="panel-heading">
             <h2>Tarama durumu</h2>
             <span class="subtle"
-              >Sunucu bağlantısı ve radyo güncelliği ayrı izlenir</span
+              >Hz = tarama/sn · ölçülen hız ve sn/tarama</span
             >
           </div>
           <div class="table-scroll">
@@ -451,8 +461,8 @@
                   <th>SENSÖR</th>
                   <th>KAT</th>
                   <th>BAĞLANTI</th>
-                  <th>WI-FI · SON BAŞARILI TARAMA</th>
-                  <th>BLUETOOTH · SON BAŞARILI TARAMA</th>
+                  <th>WI-FI · TARAMA HIZI</th>
+                  <th>BLUETOOTH · TARAMA HIZI</th>
                 </tr>
               </thead>
               <tbody id="nodes"></tbody>

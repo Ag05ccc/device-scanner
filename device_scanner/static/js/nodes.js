@@ -1,5 +1,6 @@
 import { $, element, ageText, setText } from "./ui.js";
 import { floorFor, floorLabel } from "./placement.js";
+import { scanRate } from "./rates.js";
 
 export function radioState(node, radio, connected) {
   const scan = node.radios[radio];
@@ -50,6 +51,12 @@ export function renderNodes(nodes, view, connected, placements) {
           element("small", "cell-secondary"),
           element("small", "sensor-error"),
         );
+        const rate = element("div", "sensor-rate");
+        rate.append(
+          element("strong", "sensor-rate-value"),
+          element("small", "sensor-rate-period"),
+        );
+        cell.append(rate);
         row.append(cell);
       }
       tbody.append(row);
@@ -73,6 +80,10 @@ export function renderNodes(nodes, view, connected, placements) {
       const scan = node.radios[radio];
       setText(cell.querySelector("span"), radioState(node, radio, connected));
       cell.dataset.state = scan.freshness;
+      const rate = scanRate(scan, node.online, connected);
+      setText(cell.querySelector(".sensor-rate-value"), rate.text);
+      setText(cell.querySelector(".sensor-rate-period"), rate.detail);
+      cell.querySelector(".sensor-rate").title = rate.title;
       setText(
         cell.querySelector(".cell-secondary"),
         scan.last_success_at

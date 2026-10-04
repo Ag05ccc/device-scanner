@@ -149,6 +149,8 @@ Türkçe arayüz dört görünümden oluşur:
 
 Genel bakışın Wi-Fi, Bluetooth ve **Yeni · son 10 dk** sayaçları bina genelini anlatır; liste filtresiyle değişmez. Aynı adresi üç Pi görürse cihaz listesinde bir satır, ayrıntıda üç kaynak vardır. Aynı adlı farklı adresler ayrı kalır. Bluetooth BT/BLE aynı adres için tekilleştirilir; Wi-Fi ayrı radyo ailesidir. Sayılar adres bazındadır: kişi, kesin fiziksel cihaz veya bağlı Wi-Fi istemci sayısı değildir.
 
+Üstteki **Tarama hızı / Pi** göstergesi, Wi-Fi ve Bluetooth için ölçülen ortalama hızı **Hz (tarama/sn)** olarak verir. Örneğin **0,25 Hz**, **4 saniyede bir tarama** demektir. **Sensörler** tablosunda her Pi/radyonun kendi hızı ve `sn/tarama` süresi görünür. Sunucu, başarılı tarama raporları arasındaki son en fazla 10 zaman aralığını ölçer; bulunan cihaz sayısı, heartbeat veya ekranın yenilenmesi bu sayıya dahil edilmez. İlk iki başarılı tarama gelmeden hız bilinmez. Tarama gecikirse, hata oluşursa veya bağlantı kesilirse eski hız yerine **—** gösterilir. Kısmi ölçümde ortalamaya kaç radyonun katıldığı belirtilir; Pi sayısı artınca hızlar toplanmaz.
+
 **Gözlenen kat**, yayını duyan sensörün katıdır. Bir kayıt birden fazla katta görülebilir; kat sayıları örtüşür ve toplanarak bina toplamı bulunmaz. En güçlü RSSI cihazı kesin bir kata yerleştirmez. Sinyal değeri uzaklık veya ölçülmüş bağlantı kalitesi değildir.
 
 Bir kayıt seçildiğinde kaynak Pi'ler, kendi RSSI değerleri ve son görülmeleri sağ panelde açılır. Sinyal grafiği seçilen kaynağın bu tarayıcı oturumundaki son 60 ölçümüdür; farklı Pi okumaları tek çizgiye karıştırılmaz. Teknik WiGLE kaydı isteğe bağlı açılır. Kanal grafiği kanal/bant başına farklı BSSID sayısını gösterir; kanal doluluğunu veya paraziti ölçmez.

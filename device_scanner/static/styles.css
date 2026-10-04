@@ -395,3 +395,21 @@ tbody tr.previous { color: var(--muted); }
 }
 
 .drawer-times { margin-top: 8px; line-height: 1.65; }
+
+/* Measured scan cadence stays secondary to the device inventory. */
+.scan-telemetry { text-align: right; flex-shrink: 0; }
+.scan-rate-summary { display: flex; justify-content: flex-end; align-items: center; gap: 14px; font-size: 11px; color: var(--muted); }
+.scan-rate-summary strong { margin-left: 4px; color: var(--text); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.scan-rate-label { font-size: 10px; }
+.scan-telemetry-note { display: flex; justify-content: flex-end; gap: 12px; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.sensor-rate { display: flex; align-items: baseline; gap: 9px; margin-top: 5px; }
+.sensor-rate-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sensor-rate-period { color: var(--muted); font-size: 11px; }
+@media (max-width: 1100px) {
+  .scan-telemetry-note { flex-direction: column; gap: 0; }
+}
+@media (max-width: 760px) {
+  .workspace-heading { flex-wrap: wrap; gap: 10px; }
+  .scan-telemetry { width: 100%; text-align: left; }
+  .scan-rate-summary, .scan-telemetry-note { justify-content: flex-start; }
+}

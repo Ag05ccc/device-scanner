@@ -16,7 +16,7 @@ from typing import Any, Callable
 from urllib.parse import urlsplit
 
 from .wigle import validate_record
-from .monitoring import ObservationHistory
+from .monitoring import MAX_SCAN_TICKS, ObservationHistory, scan_rate
 from .placements import Placements, validate_placement
 
 
@@ -27,7 +27,7 @@ STATIC_DIR = Path(__file__).with_name("static")
 # An explicit allowlist keeps application files outside the public web root.
 STATIC_FILES = {"/": ("index.html", "text/html"),
                 "/static/styles.css": ("styles.css", "text/css")}
-for module in ("app", "api", "observations", "ui", "nodes", "results", "details", "charts", "export", "building", "placement", "entities", "overview", "devices"):
+for module in ("app", "api", "observations", "ui", "nodes", "results", "details", "charts", "export", "building", "placement", "entities", "overview", "devices", "rates"):
     STATIC_FILES[f"/static/js/{module}.js"] = (f"js/{module}.js", "text/javascript")
 
 
@@ -107,7 +107,7 @@ def _waiting_radio() -> dict[str, Any]:
             "observed_at": None, "received_at": None, "last_success_at": None,
             "last_error_at": None,
             "enabled": None, "expected_cycle_seconds": None,
-            "_last_success_tick": None}
+            "_last_success_tick": None, "_scan_ticks": []}
 
 
 class ScannerServer(ThreadingHTTPServer):
@@ -152,7 +152,10 @@ class ScannerServer(ThreadingHTTPServer):
                         _last_seen_tick=now)
             for name, radio in node["radios"].items():
                 if "enabled_radios" in report:
-                    radio["enabled"] = name in report["enabled_radios"]
+                    enabled = name in report["enabled_radios"]
+                    if enabled != radio["enabled"]:
+                        radio["_scan_ticks"].clear()
+                    radio["enabled"] = enabled
                 if name in report.get("expected_cycle_seconds", {}):
                     radio["expected_cycle_seconds"] = report["expected_cycle_seconds"][name]
             if report["kind"] == "scan":
@@ -167,6 +170,10 @@ class ScannerServer(ThreadingHTTPServer):
                 if report["status"] == "success":
                     radio["observations"] = copy.deepcopy(report["observations"])
                     radio.update(last_success_at=received_at, _last_success_tick=now)
+                    ticks = radio["_scan_ticks"]
+                    if not ticks or now > ticks[-1]:
+                        ticks.append(now)
+                        del ticks[:-MAX_SCAN_TICKS]
                     self.history.accept(report["node_id"], report["radio"],
                                         report["observations"], now, received_at,
                                         scanner=report["scanner"])
@@ -191,6 +198,9 @@ class ScannerServer(ThreadingHTTPServer):
                         "error" if radio["status"] == "error" else
                         "waiting" if success_age is None else
                         "fresh" if success_age < threshold else "stale")
+                    radio.update(scan_rate(
+                        radio.pop("_scan_ticks"), now=now,
+                        available=node["online"] and radio["freshness"] == "fresh"))
                     radio["recent_observations"] = self.history.snapshot(node_id, name, now)
                 nodes.append(node)
             return {"session_started_at": self.session_started_at, "nodes": nodes}

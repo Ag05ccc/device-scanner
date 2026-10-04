@@ -1,5 +1,6 @@
 import { $, element, setText, ageText } from "./ui.js";
 import { floorSummaries } from "./entities.js";
+import { aggregateScanRate } from "./rates.js";
 
 const countText = (value) => (value === null ? "—" : String(value));
 let announcedState = null;
@@ -76,6 +77,31 @@ export function renderOverview(nodes, entities, summary, view, connected) {
       ? "KARMA VERİ · Gerçek ölçümler ve demo cihazları birlikte gösteriliyor."
       : "DEMO · Cihazlar ve sinyal ölçümleri simülasyondur.",
   );
+  const rates = ["wifi", "bluetooth"].map((radio) => {
+    const rate = aggregateScanRate(nodes, radio, connected);
+    const target = $("scan-rate-" + radio);
+    setText(target, rate.text);
+    target.title = rate.title;
+    target.setAttribute(
+      "aria-label",
+      `${radio === "wifi" ? "Wi-Fi" : "Bluetooth"}: ${rate.text}. ${rate.detail}`,
+    );
+    return rate;
+  });
+  const total = rates.reduce((sum, rate) => sum + rate.total, 0);
+  const available = rates.reduce((sum, rate) => sum + rate.available, 0);
+  setText(
+    $("scan-rate-note"),
+    !connected
+      ? "Bağlantı yok"
+      : !available
+        ? "Ölçüm bekleniyor"
+        : available < total
+          ? `Kısmi ölçüm · ${available}/${total} radyo`
+          : "Ölçülen ortalama · Hz = tarama/sn",
+  );
+  $("scan-rate-note").title =
+    "Sunucuya ulaşan başarılı taramaların son en fazla 10 aralığı. Ekranın yenilenme hızı değildir. Pi bazında hız ve süre Sensörler ekranındadır.";
   const scanDates = nodes
     .flatMap((node) =>
       Object.values(node.radios).map((scan) => scan.last_success_at),
