@@ -25,7 +25,7 @@ STATIC_DIR = Path(__file__).with_name("static")
 # An explicit allowlist keeps application files outside the public web root.
 STATIC_FILES = {"/": ("index.html", "text/html"),
                 "/static/styles.css": ("styles.css", "text/css")}
-for module in ("app", "api", "observations", "ui", "nodes", "results", "details", "charts", "export"):
+for module in ("app", "api", "observations", "ui", "nodes", "results", "details", "charts", "export", "building", "placement"):
     STATIC_FILES[f"/static/js/{module}.js"] = (f"js/{module}.js", "text/javascript")
 
 

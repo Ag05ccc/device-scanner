@@ -281,6 +281,20 @@ try {
     "Listening for your scanners",
   );
   pass("Empty server renders a useful waiting state");
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('.building-floor').length",
+    ),
+    3,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('.floor-empty:not([hidden])').length",
+    ),
+    3,
+  );
 
   const paused = new Set();
   const post = async (nodeId, report) => {
@@ -376,6 +390,59 @@ try {
     /Ch 36 \(5 GHz\): 1/,
   );
   pass("All three Pis report; channel chart deduplicates shared BSSIDs");
+
+  for (let floor = 1; floor <= 3; floor++) {
+    assert.equal(
+      await evaluate(
+        session,
+        `document.querySelector('#floor-nodes-${floor} .building-node').dataset.nodeId`,
+      ),
+      `pi-0${floor}`,
+    );
+  }
+  await click(session, '#building .building-node[data-node-id="pi-02"]');
+  assert.equal(await text(session, "#placement-location"), "2. kat");
+  assert.equal(
+    await evaluate(session, "document.querySelectorAll('#results tr').length"),
+    4,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelector('#nodes [data-node-id=\"pi-02\"]').getAttribute('aria-pressed')",
+    ),
+    "true",
+  );
+  // Change floors with the keyboard, then leave focus in place during polling.
+  await evaluate(session, "document.getElementById('placement-floor').focus()");
+  await key(session, "ArrowUp", "ArrowUp", 38);
+  assert.equal(await text(session, "#placement-location"), "1. kat");
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#floor-nodes-1 .building-node').length",
+    ),
+    2,
+  );
+  await sleep(2300);
+  assert.equal(
+    await evaluate(session, "document.activeElement.id"),
+    "placement-floor",
+  );
+  await cdp("Page.reload", {}, session);
+  await untilPage(
+    session,
+    "document.querySelectorAll('#floor-nodes-1 .building-node').length === 2",
+    "saved floor placement",
+  );
+  await click(session, '#building .building-node[data-node-id="pi-02"]');
+  assert.equal(await text(session, "#placement-location"), "1. kat");
+  await evaluate(session, "document.getElementById('placement-floor').focus()");
+  await key(session, "ArrowDown", "ArrowDown", 40);
+  assert.equal(await text(session, "#placement-location"), "2. kat");
+  pass(
+    "Building selection, multiple Pis per floor, keyboard placement and reload persistence work",
+  );
 
   await click(session, '#nodes [data-node-id="pi-02"]');
   assert.equal(
@@ -648,6 +715,13 @@ try {
     "offline Pi",
   );
   assert.equal(await text(session, "#online-value"), "2");
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelector('#building .building-node[data-node-id=\"pi-03\"]').dataset.state",
+    ),
+    "offline",
+  );
   assert.equal(await text(session, "#observations-value"), "0");
   paused.delete(3);
   await untilPage(
@@ -671,6 +745,13 @@ try {
     "server outage banner",
   );
   assert.equal(await text(session, "#online-value"), "—");
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelector('#building .building-node[data-node-id=\"pi-03\"]').dataset.state",
+    ),
+    "unknown",
+  );
   assert.equal(
     await evaluate(session, "document.querySelectorAll('#results tr').length"),
     4,
@@ -720,6 +801,58 @@ try {
   await click(session, "#results tr:first-child .result-name");
   await screenshot(session, "/tmp/device-scanner-mobile.png");
   pass("Tablet and phone layouts fit; Pi selection and details work on mobile");
+
+  // Additional Pis have no assumed physical location; explicitly assign them.
+  await sendScan("pi-04", "wifi", wifi(4));
+  await click(session, "#refresh");
+  await untilPage(
+    session,
+    "document.querySelector('#unplaced-nodes .building-node')?.dataset.nodeId === 'pi-04'",
+    "additional Pi in unplaced area",
+  );
+  await click(session, '#unplaced-nodes .building-node[data-node-id="pi-04"]');
+  assert.equal(await text(session, "#placement-location"), "Kat seçilmedi");
+  await evaluate(
+    session,
+    "const select = document.getElementById('placement-floor'); select.value = '2'; select.dispatchEvent(new Event('change'))",
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.querySelectorAll('#floor-nodes-2 .building-node').length",
+    ),
+    2,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.getElementById('building-unplaced').hidden",
+    ),
+    true,
+  );
+  assert.equal(
+    await evaluate(
+      session,
+      "document.documentElement.scrollWidth <= innerWidth",
+    ),
+    true,
+  );
+  const bounds = await evaluate(
+    session,
+    "Array.from(document.querySelectorAll('#floor-nodes-2 .building-node')).map(el => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })",
+  );
+  assert.ok(
+    bounds[1].top >= bounds[0].bottom,
+    "multiple Pis wrap without overlap on a phone",
+  );
+  await screenshot(session, "/tmp/device-scanner-building-mobile.png");
+  await cdp(
+    "Emulation.setDeviceMetricsOverride",
+    { width: 1536, height: 1050, deviceScaleFactor: 1, mobile: false },
+    session,
+  );
+  await screenshot(session, "/tmp/device-scanner-building.png");
+  pass("Additional Pis can be assigned to occupied floors and wrap on mobile");
   assert.deepEqual(runtimeErrors, []);
   assert.equal(
     browserRequests.some(

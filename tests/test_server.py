@@ -167,6 +167,8 @@ class ServerTests(unittest.TestCase):
     def test_frontend_assets_have_browser_compatible_types_and_no_source_exposure(self):
         for path, expected_type in [("/static/styles.css", "text/css"),
                                      ("/static/js/app.js", "text/javascript"),
+                                     ("/static/js/building.js", "text/javascript"),
+                                     ("/static/js/placement.js", "text/javascript"),
                                      ("/static/js/observations.js", "text/javascript")]:
             with self.subTest(path=path), urlopen(self.base + path) as response:
                 self.assertEqual(response.status, 200)

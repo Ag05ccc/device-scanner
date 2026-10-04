@@ -13,6 +13,13 @@ import { renderResults } from "./results.js";
 import { renderDetails } from "./details.js";
 import { renderHistory, renderDistribution } from "./charts.js";
 import { exportDocument, downloadReport } from "./export.js";
+import { renderBuilding } from "./building.js";
+import {
+  FLOORS,
+  PLACEMENT_KEY,
+  loadPlacements,
+  savePlacements,
+} from "./placement.js";
 
 const view = {
   radio: "wifi",
@@ -28,6 +35,7 @@ let receivedAt = null;
 let rows = [];
 let order = [];
 const history = new Map();
+let placements = loadPlacements();
 
 function renderMetrics() {
   const scoped = nodes.filter(
@@ -99,7 +107,8 @@ function render() {
     view.selectedId = rows[0]?.id || null;
   const selected = rows.find((row) => row.id === view.selectedId);
   renderMetrics();
-  renderNodes(nodes, view, connected);
+  renderNodes(nodes, view, connected, placements);
+  renderBuilding(nodes, view, connected, placements);
   renderResults(rows, view, { nodes, connected, total: all.length });
   renderDetails(selected, connected);
   renderHistory(selected, history, connected);
@@ -142,6 +151,31 @@ $("all-nodes").addEventListener("click", () => changeView({ nodeId: "all" }));
 $("nodes").addEventListener("click", (event) => {
   const button = event.target.closest("[data-node-id]");
   if (button) changeView({ nodeId: button.dataset.nodeId });
+});
+$("building").addEventListener("click", (event) => {
+  const button = event.target.closest(".building-node");
+  if (button) changeView({ nodeId: button.dataset.nodeId });
+});
+$("building-all").addEventListener("click", () =>
+  changeView({ nodeId: "all" }),
+);
+$("placement-floor").addEventListener("change", (event) => {
+  if (!nodes.some((node) => node.node_id === view.nodeId)) return;
+  const floor =
+    event.target.value === "unplaced" ? null : Number(event.target.value);
+  if (floor !== null && !FLOORS.includes(floor)) return;
+  placements.set(view.nodeId, floor);
+  const saved = savePlacements(placements);
+  $("placement-note").textContent = saved
+    ? "Yerleşim bu tarayıcıda kaydedildi."
+    : "Yerleşim bu oturumda geçerli; tarayıcı kaydetmeye izin vermiyor.";
+  render();
+});
+window.addEventListener("storage", (event) => {
+  if (event.key === PLACEMENT_KEY || event.key === null) {
+    placements = loadPlacements();
+    render();
+  }
 });
 for (const radio of RADIOS)
   $("radio-" + radio).addEventListener("click", () => changeView({ radio }));

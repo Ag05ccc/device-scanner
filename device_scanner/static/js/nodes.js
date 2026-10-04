@@ -1,6 +1,7 @@
 import { $, element, icon } from "./ui.js";
+import { floorFor, floorLabel } from "./placement.js";
 
-export function renderNodes(nodes, view, connected) {
+export function renderNodes(nodes, view, connected, placements) {
   $("sidebar-count").textContent = nodes.length;
   $("node-count").textContent = nodes.length;
   $("all-nodes").classList.toggle("active", view.nodeId === "all");
@@ -50,7 +51,7 @@ export function renderNodes(nodes, view, connected) {
           ? "Error"
           : "Online";
     button.querySelector(".node-meta").textContent =
-      `${node.scanner === "dummy" ? "Dummy" : "Real Pi"} · ${scan.status === "waiting" ? "waiting" : `${scan.observations.length} ${scan.status === "error" || !node.online ? "previous" : "results"}`}`;
+      `${floorLabel(floorFor(node.node_id, placements))} · ${node.scanner === "dummy" ? "Dummy" : "Real Pi"} · ${scan.status === "waiting" ? "waiting" : `${scan.observations.length} ${scan.status === "error" || !node.online ? "previous" : "results"}`}`;
     button.querySelector(".state-label").textContent = state;
     button.querySelector(".node-state").className =
       `node-state ${state === "Error" ? "error" : state !== "Online" ? "offline" : ""}`;

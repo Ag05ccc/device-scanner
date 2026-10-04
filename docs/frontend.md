@@ -24,6 +24,8 @@ frontend packages, build step, external fonts, analytics, or CDN requests.
 | `js/api.js` | Fetching `/api/nodes`, request timeout, refresh scheduling |
 | `js/observations.js` | Read WiGLE records, search, sort, count channels, collect history |
 | `js/nodes.js` | Pi navigation and status |
+| `js/building.js` | Three-floor building, Pi cards and selected Pi placement controls |
+| `js/placement.js` | Initial floors, saved assignments and browser storage |
 | `js/results.js` | Results table and empty states |
 | `js/details.js` | Selected observation and its complete WiGLE record |
 | `js/charts.js` | Signal history and channel/RSSI distribution SVGs |
@@ -69,6 +71,33 @@ The theme button switches between light and dark. On the first visit, the system
 preference is used; a chosen theme is remembered in that browser when storage is
 available.
 
+## Building placement
+
+**Bina yerleşimi** shows a schematic building with floor 3 at the top and floor 1
+at the bottom. Initially `pi-01`, `pi-02` and `pi-03` appear on floors 1, 2 and 3;
+IDs such as `pi-1` and `Pi-01` are also recognized. Other Pis appear in the
+**Yerleştirilmemiş Pi'ler** area until assigned.
+
+Click a Pi in the building to select it in the sidebar and filter its observations
+below. Choose **Bulunduğu kat** to move that Pi. Any number of Pis can share a
+floor; cards wrap and the floor expands as needed, including on phones. Choosing
+**Yerleştirilmemiş** removes a floor assignment. **Tüm Pi'ler** returns to all
+scanners. Native buttons and the select control support keyboard navigation.
+
+Building cards show each Pi's connection state and the latest received Wi-Fi/BT
+counts. A radio error is marked even when the other radio is selected in the
+results. During a server outage, cards say **Bağlantı yok** and retain their
+positions; an offline Pi remains visible. Counts on offline/error cards are
+labeled as previous records.
+
+Assignments are UI metadata saved in this browser for this server address, using
+`device-scanner-placement-v1` in local storage. They survive reloads and server
+restarts and synchronize across tabs on the same origin. They are not shared
+across computers or written into WiGLE records or exported observations. If
+browser storage is blocked, changes work for the current page session and the
+panel explains that they could not be saved. Nodes still appear only after they
+report to the server; the building does not create or configure physical Pis.
+
 ## What the graphs and statuses mean
 
 - **Wi-Fi and Bluetooth signal:** the reported `RSSI` in dBm. Blank readings
@@ -96,8 +125,8 @@ The existing API does not expose per-radio expiry or which radios are disabled.
 “Latest” therefore means the last successful report on an online Pi, not a promise
 that the radio is still scanning. The inspector's **Last radio report** dates the
 report, which can be an error; it does not date retained successful observations.
-The sidebar shows Pis that have reported since this server started. No configured
-inventory, floor map, IP assignment, or remote start/stop command is added.
+The sidebar and building show Pis that have reported since this server started.
+There is no configured inventory, IP assignment, or remote start/stop command.
 
 ## Export
 
@@ -126,3 +155,6 @@ npm dependencies. It launches an isolated temporary server, sends synthetic repo
 checks real interactions/downloads/failure recovery, and cleans up its processes.
 Screenshots go to `/tmp/device-scanner-desktop.png`, `/tmp/device-scanner-dark.png`,
 and `/tmp/device-scanner-mobile.png`.
+The browser check also verifies floor placement, multiple Pis on one floor,
+keyboard selection and saved assignments, and captures
+`/tmp/device-scanner-building.png` and `/tmp/device-scanner-building-mobile.png`.

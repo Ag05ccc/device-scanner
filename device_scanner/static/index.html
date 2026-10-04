@@ -143,6 +143,156 @@
             </div>
           </div>
           <p id="connection-banner" class="notice" role="alert" hidden></p>
+          <section
+            id="building"
+            class="panel building-panel"
+            aria-labelledby="building-title"
+            lang="tr"
+          >
+            <div class="panel-heading">
+              <div>
+                <h2 id="building-title">Bina yerleşimi</h2>
+                <p>Katları keşfet. Her Pi'nin gördüklerini incele.</p>
+              </div>
+              <span id="building-summary" class="building-summary"
+                >3 kat · 0 Pi</span
+              >
+            </div>
+            <div class="building-layout">
+              <div class="building-scene">
+                <div class="building-roof" aria-hidden="true">
+                  <span></span>
+                </div>
+                <div class="building-floors">
+                  <section
+                    id="building-floor-3"
+                    class="building-floor"
+                    aria-labelledby="floor-title-3"
+                  >
+                    <div class="floor-label">
+                      <span class="floor-number" aria-hidden="true">03</span>
+                      <h3 id="floor-title-3">3. kat</h3>
+                      <span id="floor-count-3">0 Pi</span>
+                    </div>
+                    <div class="floor-space">
+                      <div id="floor-nodes-3" class="floor-nodes"></div>
+                      <p id="floor-empty-3" class="floor-empty">
+                        Bu katta henüz Pi yok
+                      </p>
+                    </div>
+                  </section>
+                  <section
+                    id="building-floor-2"
+                    class="building-floor"
+                    aria-labelledby="floor-title-2"
+                  >
+                    <div class="floor-label">
+                      <span class="floor-number" aria-hidden="true">02</span>
+                      <h3 id="floor-title-2">2. kat</h3>
+                      <span id="floor-count-2">0 Pi</span>
+                    </div>
+                    <div class="floor-space">
+                      <div id="floor-nodes-2" class="floor-nodes"></div>
+                      <p id="floor-empty-2" class="floor-empty">
+                        Bu katta henüz Pi yok
+                      </p>
+                    </div>
+                  </section>
+                  <section
+                    id="building-floor-1"
+                    class="building-floor"
+                    aria-labelledby="floor-title-1"
+                  >
+                    <div class="floor-label">
+                      <span class="floor-number" aria-hidden="true">01</span>
+                      <h3 id="floor-title-1">1. kat</h3>
+                      <span id="floor-count-1">0 Pi</span>
+                    </div>
+                    <div class="floor-space">
+                      <div id="floor-nodes-1" class="floor-nodes"></div>
+                      <p id="floor-empty-1" class="floor-empty">
+                        Bu katta henüz Pi yok
+                      </p>
+                    </div>
+                  </section>
+                </div>
+                <div class="building-ground" aria-hidden="true">
+                  <span>GİRİŞ</span>
+                </div>
+                <div class="building-legend">
+                  <span><i class="status-dot"></i>Çevrimiçi</span>
+                  <span><i class="status-dot offline-dot"></i>Çevrimdışı</span>
+                  <span><i class="status-dot error-dot"></i>Radyo hatası</span>
+                </div>
+              </div>
+              <aside class="placement-panel" aria-label="Pi kat yerleşimi">
+                <div class="placement-heading">
+                  <span class="panel-label">SEÇİLİ PI</span>
+                  <button
+                    id="building-all"
+                    class="building-all active"
+                    type="button"
+                    aria-pressed="true"
+                  >
+                    Tüm Pi'ler
+                  </button>
+                </div>
+                <div id="placement-empty" class="placement-empty">
+                  <span class="placement-symbol"
+                    ><svg class="icon" aria-hidden="true">
+                      <use href="#i-node" /></svg
+                  ></span>
+                  <h3>Bir Pi seçin</h3>
+                  <p>
+                    Binadaki bir cihaza tıklayarak sonuçlarını görün ve
+                    bulunduğu katı seçin.
+                  </p>
+                </div>
+                <div id="placement-selection" hidden>
+                  <span id="placement-state" class="placement-state"></span>
+                  <h3 id="placement-node-name"></h3>
+                  <p id="placement-location" class="placement-location"></p>
+                  <label class="placement-field" for="placement-floor"
+                    >Bulunduğu kat</label
+                  >
+                  <select id="placement-floor">
+                    <option value="1">1. kat</option>
+                    <option value="2">2. kat</option>
+                    <option value="3">3. kat</option>
+                    <option value="unplaced">Yerleştirilmemiş</option>
+                  </select>
+                  <div class="placement-radios">
+                    <p>
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-wifi" /></svg
+                      ><span id="placement-wifi"></span>
+                    </p>
+                    <p>
+                      <svg class="icon" aria-hidden="true">
+                        <use href="#i-bluetooth" /></svg
+                      ><span id="placement-bluetooth"></span>
+                    </p>
+                  </div>
+                </div>
+                <div class="placement-help">
+                  <p>Bir katta birden fazla Pi olabilir.</p>
+                  <p id="placement-note" role="status">
+                    Kat seçimleri bu tarayıcıda saklanır.
+                  </p>
+                </div>
+              </aside>
+            </div>
+            <div id="building-unplaced" class="building-unplaced" hidden>
+              <div class="unplaced-heading">
+                <h3>
+                  Yerleştirilmemiş Pi'ler
+                  <span id="unplaced-count" class="count-badge">0</span>
+                </h3>
+                <p>Bir cihaz seçip katını belirleyin.</p>
+              </div>
+              <div id="unplaced-nodes" class="floor-nodes"></div>
+            </div>
+          </section>
           <section class="metrics" aria-label="Workspace summary">
             <article class="metric">
               <div class="metric-top">

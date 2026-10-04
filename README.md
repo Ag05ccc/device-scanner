@@ -128,11 +128,13 @@ Bu değişiklikten sonra server ve tüm node'ları birlikte güncelleyip yeniden
 
 Pano, `bakici-app` Pi seçimi/ayrıntı düzeninden ve [Acrylic Wi-Fi Analyzer](https://www.acrylicwifi.com/en/wifi-analyzer/) uygulamasının tablo, sinyal ve kanal görünümlerinden esinlenir. İngilizce arayüz; Pi seçimi, Bluetooth/Wi-Fi geçişi, ad/adres araması, Wi-Fi bant filtresi, sıralama, JSON/CSV dışa aktarma ve açık/koyu tema sunar. Bir satır seçildiğinde WiGLE kaydının tamamı incelenebilir. CSV dosyası WiGLE v1.6 biçimindedir; JSON ayrıca Pi, filtre ve durum bilgisini saklar.
 
+**Bina yerleşimi** bölümünde üç katlı bina görünür. Başlangıçta `pi-01` 1. katta, `pi-02` 2. katta, `pi-03` 3. kattadır; `pi-1` gibi isimler de tanınır. Binadaki bir Pi'ye tıklayınca sonuçlar o cihaza göre filtrelenir. **Bulunduğu kat** menüsünden Pi'yi taşıyabilirsin; bir katta birden fazla Pi olabilir. Ek cihazlar **Yerleştirilmemiş Pi'ler** alanında görünür. Kat seçimleri bu tarayıcıda, aynı sunucu adresi için kaydedilir; başka bilgisayarlarla paylaşılmaz. WiGLE tarama kayıtlarına kat bilgisi eklenmez.
+
 Sinyal grafiği yalnız tarayıcı açıkken gelen yeni raporlardan oluşur; son 60 ölçümü tutar. Kanal grafiği filtrelenen güncel başarılı sonuçlarda aynı BSSID'yi kanal/bant başına bir kez sayar; kanal doluluk oranı veya parazit ölçmez. Tablo her Pi'nin gözlemini ayrı tutar. Hatalı/çevrimdışı Pi'lerin önceki verileri işaretlenir; sunucu kesilirse son görünüm eski olarak gösterilir.
 
 HTML/CSS/JavaScript doğrudan Python sunucusundan sunulur. Uygulamayı çalıştırmak için Node.js, npm kurulumu veya derleme gerekmez. Kodun iş bölümü ve kullanım ayrıntıları: [Frontend guide](docs/frontend.md).
 
-Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. Sonuçlar bellektedir. DHCP, kalıcı kayıt, bina haritası ve otomatik servis kurulumu bu ilk adımın kapsamına dahil değildir.
+Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. Tarama sonuçları sunucu belleğindedir; kat yerleşimi tarayıcıda saklanır. DHCP, kalıcı tarama kaydı ve otomatik servis kurulumu bu ilk adımın kapsamına dahil değildir.
 
 ## Test
 
