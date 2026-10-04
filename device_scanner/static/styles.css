@@ -5,16 +5,18 @@
   font-synthesis: none;
   --page: #f6f7fa; --surface: #fff; --surface-soft: #f9fafc; --line: #e7e9ef;
   --text: #1c2333; --muted: #697386; --subtle: #8490a3;
-  --accent: #c44b0b; --accent-solid: #df5914; --accent-soft: #fff3ea;
+  --accent: #0f766e; --accent-solid: #0f766e; --accent-soft: #edf8f6;
   --green: #23784f; --green-soft: #eaf6ef; --red: #bd3d38; --red-soft: #fff0ee;
   --sidebar: #17202f; --sidebar-text: #d3d9e4; --sidebar-muted: #a0adbf;
+  --sidebar-accent: #5eead4; --sidebar-accent-soft: #2dd4bf14; --sidebar-accent-border: #5eead433;
+  --sidebar-error: #fda4af;
   --shadow: 0 2px 4px #19233b03; --radius: 12px;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #111722; --surface: #1b2432; --surface-soft: #202b3b; --line: #303c4e;
   --text: #e9eef7; --muted: #a5b3c7; --subtle: #9ba9bb;
-  --accent: #ffac75; --accent-solid: #e86b2b; --accent-soft: #3b2b25;
+  --accent: #5eead4; --accent-solid: #0f766e; --accent-soft: #183833;
   --green: #7ad7a2; --green-soft: #21392f; --red: #ff9d93; --red-soft: #3e292c;
   --sidebar: #0d131e; --sidebar-text: #d3d9e4; --sidebar-muted: #a0adbf;
   --shadow: none;
@@ -39,15 +41,15 @@ h1, h2, h3, p { margin: 0; }
 .shell { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
 .sidebar { background: var(--sidebar); color: var(--sidebar-text); padding: 29px 18px 20px; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow: auto; }
 .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; color: #fff; font-size: 17px; font-weight: 650; letter-spacing: -.4px; padding: 0 4px 40px; }
-.brand-mark { width: 34px; height: 38px; color: #ff975a; display: grid; place-items: center; background: #e36b1f1a; border: 1px solid #ff975a35; border-radius: 10px; }
+.brand-mark { width: 34px; height: 38px; color: var(--sidebar-accent); display: grid; place-items: center; background: var(--sidebar-accent-soft); border: 1px solid var(--sidebar-accent-border); border-radius: 10px; }
 .brand-mark .icon { width: 23px; height: 23px; }
 .brand small { display: block; color: var(--sidebar-muted); font-size: 10px; letter-spacing: 1.65px; font-weight: 500; margin-top: 3px; }
 .sidebar-label { font-size: 10px; letter-spacing: 1.5px; font-weight: 650; color: var(--sidebar-muted); display: flex; justify-content: space-between; align-items: center; padding: 0 12px; margin-bottom: 12px; }
 .live-dot, .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #35b77c; flex-shrink: 0; }
 .scope-button { display: flex; width: 100%; align-items: center; gap: 10px; color: var(--sidebar-text); background: none; border-radius: 7px; padding: 12px; text-align: left; font-size: 13px; }
-.scope-button.active { background: #ed792e20; color: #ffa76d; }
+.scope-button.active { background: var(--sidebar-accent-soft); color: var(--sidebar-accent); }
 .scope-button .icon { width: 17px; height: 17px; }
-.pill { margin-left: auto; background: #ffae7920; padding: 0 6px; border-radius: 4px; font-size: 11px; }
+.pill { margin-left: auto; background: var(--sidebar-accent-soft); padding: 0 6px; border-radius: 4px; font-size: 11px; }
 .node-label { margin-top: 35px; }
 .node-list { display: grid; gap: 7px; }
 .node-button { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; text-align: left; padding: 12px 10px; border-radius: 8px; background: transparent; color: var(--sidebar-text); border: 1px solid transparent; }
@@ -60,8 +62,8 @@ h1, h2, h3, p { margin: 0; }
 .node-state { display: flex; align-items: center; gap: 5px; color: #90d2ab; font-size: 10px; }
 .node-state.offline { color: #b6becc; }
 .node-state.offline .status-dot, .connection.disconnected .status-dot { background: #929dae; }
-.node-state.error { color: #ffad88; }
-.node-state.error .status-dot { background: #ffad88; }
+.node-state.error { color: var(--sidebar-error); }
+.node-state.error .status-dot { background: var(--sidebar-error); }
 .sidebar-empty { padding: 10px 12px; font-size: 12px; color: var(--sidebar-muted); }
 .sidebar-bottom { margin-top: auto; padding: 40px 10px 0; font-size: 11px; }
 .sidebar-status { display: flex; gap: 8px; align-items: center; font-size: 12px; }
