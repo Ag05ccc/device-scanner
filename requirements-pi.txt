@@ -1,0 +1,2 @@
+# Only needed for --scanner real. Server and dummy nodes use Python's stdlib.
+dbus-fast==5.0.22

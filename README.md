@@ -1,0 +1,122 @@
+# Device Scanner
+
+Bir bilgisayarda **bir server ve üç bağımsız Raspberry Pi node'u** gibi çalışan küçük bir Python projesi. Bilgisayardaki node'lar sahte tarama verisi üretir. Raspberry Pi'ye aynı kaynak kodu aktarılır; `--scanner real` ile gerçek Bluetooth/BLE ve Wi-Fi taraması kullanılır.
+
+```text
+Tarayıcı ──► Server :8001 ◄── pi-01
+                         ◄── pi-02
+                         ◄── pi-03
+```
+
+Python 3.11+ gerekir. Server ve dummy node'lar yalnız Python standart kütüphanesini kullanır.
+
+## Hemen başlat
+
+```bash
+cd /home/gz/device-scanner
+python3 -m venv .venv
+.venv/bin/python -m device_scanner dev
+```
+
+Tarayıcıdan **http://127.0.0.1:8001** adresini aç. Üç node'un bağlantısını, Bluetooth/Wi-Fi sonuçlarını ve hata durumlarını görebilirsin. **Ctrl+C** bu komutun başlattığı bütün süreçleri kapatır.
+
+Node sayısını veya portu değiştirmek için:
+
+```bash
+.venv/bin/python -m device_scanner dev --nodes 5 --port 8002
+```
+
+Her node ayrı bir işletim sistemi sürecidir. Başlangıçta yazılan PID'lerden birini `kill PID` ile durdurabilirsin: diğer node'lar çalışmaya devam eder. Varsayılan geliştirme ayarlarında duran node yaklaşık 6 saniye sonra çevrimdışı görünür. Bu ortam Pi işletim sistemini veya radyo donanımını taklit etmez; aynı uygulama kodunun çoklu cihaz davranışını çalıştırır.
+
+## Süreçleri ayrı terminallerde çalıştır
+
+Her terminalde proje klasörüne geç. Önce server:
+
+```bash
+.venv/bin/python -m device_scanner server
+```
+
+İkinci terminalde bir node:
+
+```bash
+.venv/bin/python -m device_scanner node --id pi-01 --scanner dummy
+```
+
+Üçüncü terminalde başka bir node:
+
+```bash
+.venv/bin/python -m device_scanner node --id pi-02 --scanner dummy
+```
+
+Her node'un kimliği farklı olmalı. Elle başlatılan server için çevrimdışı eşiği varsayılan 60 saniyedir; `--offline-after 10` ile değişir. Bu eşik heartbeat aralığından büyük olmalı.
+
+Server'ı kapatıp yeniden açabilirsin. Node'lar ağ hatasını bildirir ve sonraki güncel raporlarını göndermeyi sürdürür; eski raporları biriktirmez. Server yeniden başlayınca canlı liste yeni raporlarla oluşur.
+
+## Raspberry Pi'ye aktar
+
+Proje klasörünü Pi'ye kopyala. Örneğin proje klasöründen, `USER` ve `PI_IP` değerlerini değiştirerek:
+
+```bash
+rsync -av --exclude='.venv' --exclude='.git' --exclude='__pycache__' \
+  ./ USER@PI_IP:~/device-scanner/
+```
+
+`.venv` taşınmaz; her Pi'de yeniden oluşturulur. 64-bit Raspberry Pi OS ve Python 3.11+ kullan.
+
+### Server Pi
+
+```bash
+cd ~/device-scanner
+python3 -m venv .venv
+.venv/bin/python -m device_scanner server --host 0.0.0.0
+```
+
+Tarayıcı adresi `http://SERVER_PI_IP:8001` olur. Server Pi'de radyo bağımlılığı kurulmaz.
+
+### Tarayıcı Pi
+
+Gerçek tarama Linux üzerinde çalışan BlueZ ve NetworkManager servislerini kullanır:
+
+```bash
+sudo apt-get update
+sudo apt-get install --no-install-recommends python3-venv bluez network-manager
+cd ~/device-scanner
+python3 -m venv .venv
+.venv/bin/python -m pip install --only-binary=:all: -r requirements-pi.txt
+.venv/bin/python -m device_scanner node \
+  --id pi-01 --scanner real --server http://SERVER_PI_IP:8001
+```
+
+Bluetooth adaptörü açık ve NetworkManager'ın yönettiği Wi-Fi arayüzü kullanılabilir olmalı. Çalıştıran kullanıcının D-Bus tarama izinleri gerekir; erişim sorunu veya eksik donanım panoda ilgili radyo için hata olarak görünür. Gerçek donanım taraması Pi üzerinde ayrıca doğrulanmalıdır.
+
+Gerekirse tek radyo veya belirli bir adaptör seç:
+
+```bash
+.venv/bin/python -m device_scanner node \
+  --id pi-02 --scanner real --server http://SERVER_PI_IP:8001 \
+  --radios bluetooth --bluetooth-adapter hci0
+```
+
+Wi-Fi için `--radios wifi --wifi-interface wlan0` kullanılabilir. Wi-Fi taraması çevredeki **erişim noktalarını** bulur; bunlara bağlı istemcileri listelemez. Bluetooth cihazlarının keşfedilebilir veya BLE yayını yapıyor olması gerekir.
+
+## Küçük kod yapısı
+
+- `device_scanner/server.py`: rapor alıcısı ve bellekteki son durum.
+- `device_scanner/dashboard.html`: derleme gerektirmeyen basit arayüz.
+- `device_scanner/node.py`: heartbeat, tarama döngüleri ve HTTP gönderimi.
+- `device_scanner/scanners/`: dummy ve gerçek tarayıcılar.
+- `device_scanner/dev.py`: ayrı server/node süreçlerini başlatma ve kapatma.
+
+Gerçek Bluetooth/Wi-Fi sürücüleri mevcut `bakici-app` projesindeki tarayıcılardan alınmıştır; bu proje eski klasöre import veya dosya yolu ile bağlı değildir. Geliştirme ve Pi aynı node döngüsünü kullanır, yalnız tarayıcı seçimi ve sunucu adresi değişir.
+
+API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`. Arayüz iki saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama süresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz.
+
+Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. Sonuçlar bellektedir. DHCP, kalıcı kayıt, bina haritası ve otomatik servis kurulumu bu ilk adımın kapsamına dahil değildir.
+
+## Test
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+```
+
+Testler radyo donanımı gerektirmez. Gerçek HTTP ve ayrı süreçlerle üç dummy node, bağlantı kesilmesi/toparlanma ve temiz kapanış da kontrol edilir.
