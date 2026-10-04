@@ -142,9 +142,23 @@ class ServerTests(unittest.TestCase):
         status, html = self.request("/")
         self.assertEqual(status, 200)
         self.assertIn(b"Device Scanner", html)
-        self.assertIn(b"textContent", html)
+        self.assertIn(b'type="module"', html)
+        self.assertIn(b"/static/js/app.js", html)
         self.assertNotIn(b"innerHTML", html)
         self.assertEqual(self.request("/missing")[0], 404)
+
+    def test_frontend_assets_have_browser_compatible_types_and_no_source_exposure(self):
+        for path, expected_type in [("/static/styles.css", "text/css"),
+                                     ("/static/js/app.js", "text/javascript"),
+                                     ("/static/js/observations.js", "text/javascript")]:
+            with self.subTest(path=path), urlopen(self.base + path) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.headers.get_content_type(), expected_type)
+                self.assertTrue(response.read())
+        for path in ("/static/../server.py", "/static/%2e%2e/server.py", "/server.py",
+                     "/static/js/unknown.js", "/.git/config"):
+            with self.subTest(path=path):
+                self.assertEqual(self.request(path)[0], 404)
 
 
 if __name__ == "__main__":

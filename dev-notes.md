@@ -9,9 +9,9 @@ These came from a full code review. All 18 tests in `tests/` pass, so none of th
 | # | Issue | Severity | Where | Status |
 |---|-------|----------|-------|--------|
 | 1 | Wi-Fi scan can drop networks it actually found | Medium | `scanners/wifi.py` | Open |
-| 2 | Radio data never expires; disabled radios look "waiting" | Medium | `server.py`, `dashboard.html` | Open |
+| 2 | Radio data never expires; disabled radios look "waiting" | Medium | `server.py`, `static/js/` | Open |
 | 3 | Rejected reports leave no useful trace | Medium | `node.py`, `server.py` | Open |
-| 4 | Dashboard rebuilds the whole page every 2 s | Medium (UX) | `dashboard.html` | Open |
+| 4 | Dashboard rebuilds the whole page every 2 s | Medium (UX) | `static/js/results.js`, `static/js/details.js` | Resolved in analyzer dashboard |
 | 5 | Bluetooth "connect timed out" message is unreachable | Low | `scanners/bluetooth.py` | Open |
 | 6 | Local traffic is sent through `http_proxy` | Low | `node.py`, `dev.py` | Open |
 | 7 | On Python 3.10 the node silently stops | Low | `node.py`, `__main__.py` | Open |
@@ -45,7 +45,7 @@ These came from a full code review. All 18 tests in `tests/` pass, so none of th
 
 ### 2. Radio data never expires; disabled radios look "waiting"
 
-*Reproduced.* Code: [server.py:107-133](device_scanner/server.py#L107-L133) (`accept_report`, `snapshot`) and [dashboard.html](device_scanner/dashboard.html).
+*Reproduced in the original dashboard.* Code: [server.py](device_scanner/server.py) (`accept_report`, `snapshot`). The current [frontend guide](docs/frontend.md) documents the remaining API limitations.
 
 **Problem**
 - A node's `online` flag is driven only by heartbeats, and the data for each radio has no age.
@@ -86,7 +86,12 @@ These came from a full code review. All 18 tests in `tests/` pass, so none of th
 
 ### 4. Dashboard rebuilds the whole page every 2 s
 
-Code: [dashboard.html:50-91](device_scanner/dashboard.html#L50-L91) (`render`, `disconnected`).
+Original code: `dashboard.html` (`render`, `disconnected`) in baseline commit `77bfcfb`.
+
+**Resolved (2026-10-04):** the analyzer dashboard keeps Pi buttons, result rows,
+and selected-detail elements in place. Unchanged text is not replaced. Server
+outages retain the last snapshot with an outdated label. The Chrome check verifies
+row order, focus, selected text, expanded properties, and connection recovery.
 
 **Problem:** every poll runs `container.replaceChildren()`. As a result:
 - scrolling inside the scan data `<pre>` jumps back to the top,

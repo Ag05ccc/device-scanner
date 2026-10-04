@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Device Scanner · Wireless overview</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script type="module" src="/static/js/app.js"></script>
+  </head>
+  <body>
+    <svg
+      class="icon-library"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <symbol id="i-wifi" viewBox="0 0 24 24">
+        <path
+          d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"
+        />
+        <circle cx="12" cy="20" r="1" />
+      </symbol>
+      <symbol id="i-bluetooth" viewBox="0 0 24 24">
+        <path d="m7 7 10 10-5 4V3l5 4L7 17" />
+      </symbol>
+      <symbol id="i-node" viewBox="0 0 24 24">
+        <rect x="5" y="5" width="14" height="14" rx="3" />
+        <path
+          d="M9 9h6v6H9zM9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"
+        />
+      </symbol>
+      <symbol id="i-grid" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m16 16 5 5" />
+      </symbol>
+      <symbol id="i-download" viewBox="0 0 24 24">
+        <path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5" />
+      </symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24">
+        <path
+          d="M20 7v5h-5M4 17v-5h5M5 7a8 8 0 0 1 13-2l2 3M4 16l2 3a8 8 0 0 0 13-2"
+        />
+      </symbol>
+      <symbol id="i-signal" viewBox="0 0 24 24">
+        <path d="M4 20v-4m5 4v-8m6 8V8m5 12V4" />
+      </symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24">
+        <path d="m12 3 10 18H2L12 3zm0 6v5m0 3v.5" />
+      </symbol>
+      <symbol id="i-theme" viewBox="0 0 24 24">
+        <path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z" />
+      </symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24">
+        <path d="M5 12h14m-5-5 5 5-5 5" />
+      </symbol>
+    </svg>
+    <a class="skip-link" href="#main">Skip to results</a>
+    <div class="shell">
+      <aside class="sidebar" aria-label="Scanner nodes">
+        <a class="brand" href="/" aria-label="Device Scanner home"
+          ><span class="brand-mark"
+            ><svg class="icon"><use href="#i-wifi" /></svg></span
+          ><span>Device Scanner<small>WIRELESS MONITOR</small></span></a
+        >
+        <div class="sidebar-label">
+          WORKSPACE <span class="live-dot"></span>
+        </div>
+        <button
+          id="all-nodes"
+          class="scope-button active"
+          type="button"
+          aria-pressed="true"
+        >
+          <svg class="icon"><use href="#i-grid" /></svg><span>All scanners</span
+          ><span id="sidebar-count" class="pill">0</span>
+        </button>
+        <div class="sidebar-label node-label">
+          RASPBERRY PI NODES <span id="node-count">0</span>
+        </div>
+        <nav id="nodes" class="node-list" aria-label="Choose a Pi">
+          <p class="sidebar-empty">Waiting for your first Pi…</p>
+        </nav>
+        <div class="sidebar-bottom">
+          <span class="sidebar-status"
+            ><span class="live-dot"></span>Independent scanners</span
+          >
+          <p>One view of the wireless world<br />around your Raspberry Pis.</p>
+          <span class="version">LOCAL WORKSPACE <span>v1.0</span></span>
+        </div>
+      </aside>
+      <div class="main-shell">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Workspace <span>/</span> <strong>Overview</strong>
+          </div>
+          <div class="topbar-actions">
+            <span id="connection" class="connection" role="status"
+              ><span class="status-dot"></span
+              ><span id="connection-text">Connecting</span></span
+            ><span class="topbar-divider"></span
+            ><button
+              id="theme"
+              class="icon-button"
+              type="button"
+              aria-label="Switch to dark theme"
+              title="Switch to dark theme"
+            >
+              <svg class="icon"><use href="#i-theme" /></svg>
+            </button>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">YOUR NETWORK, AT A GLANCE</div>
+              <h1>Wireless overview</h1>
+              <p>Discover what’s nearby. See what every Pi sees.</p>
+            </div>
+            <div class="heading-actions">
+              <button id="refresh" class="button" type="button">
+                <svg class="icon"><use href="#i-refresh" /></svg>Refresh
+              </button>
+              <details class="export-menu">
+                <summary class="button primary">
+                  <svg class="icon"><use href="#i-download" /></svg>Export
+                  <span aria-hidden="true">⌄</span>
+                </summary>
+                <div class="menu-panel">
+                  <button id="export-json" type="button" disabled>
+                    Download JSON</button
+                  ><button id="export-csv" type="button" disabled>
+                    Download CSV
+                  </button>
+                </div>
+              </details>
+            </div>
+          </div>
+          <p id="connection-banner" class="notice" role="alert" hidden></p>
+          <section class="metrics" aria-label="Workspace summary">
+            <article class="metric">
+              <div class="metric-top">
+                Scanners online<svg class="icon"><use href="#i-node" /></svg>
+              </div>
+              <div class="metric-value">
+                <strong id="online-value">—</strong
+                ><span id="online-total"></span>
+              </div>
+              <p id="online-note">Waiting for reports</p>
+            </article>
+            <article class="metric">
+              <div class="metric-top" id="observations-label">
+                Wi-Fi observations<svg class="icon"><use href="#i-wifi" /></svg>
+              </div>
+              <div class="metric-value">
+                <strong id="observations-value">—</strong
+                ><span class="metric-tag">LATEST</span>
+              </div>
+              <p id="observations-note">In the selected scope</p>
+            </article>
+            <article class="metric">
+              <div class="metric-top">
+                Strongest signal<svg class="icon"><use href="#i-signal" /></svg>
+              </div>
+              <div class="metric-value">
+                <strong id="signal-value">—</strong
+                ><span id="signal-unit"></span>
+              </div>
+              <p id="signal-note">Waiting for observations</p>
+            </article>
+            <article class="metric">
+              <div class="metric-top">
+                Scan errors<svg class="icon"><use href="#i-alert" /></svg>
+              </div>
+              <div class="metric-value">
+                <strong id="errors-value">—</strong
+                ><span id="errors-tag" class="metric-tag">RADIOS</span>
+              </div>
+              <p id="errors-note">Bluetooth and Wi-Fi</p>
+            </article>
+          </section>
+          <div class="analyzer-bar">
+            <div class="radio-tabs" role="group" aria-label="Radio type">
+              <button
+                id="radio-wifi"
+                type="button"
+                class="radio-tab active"
+                aria-pressed="true"
+              >
+                <svg class="icon"><use href="#i-wifi" /></svg>Wi-Fi<span
+                  id="wifi-count"
+                  class="tab-count"
+                  >0</span
+                ></button
+              ><button
+                id="radio-bluetooth"
+                type="button"
+                class="radio-tab"
+                aria-pressed="false"
+              >
+                <svg class="icon"><use href="#i-bluetooth" /></svg
+                >Bluetooth<span id="bluetooth-count" class="tab-count">0</span>
+              </button>
+            </div>
+            <span id="updated" class="update-note"
+              >Waiting for first update</span
+            >
+          </div>
+          <div class="analysis-grid">
+            <section
+              class="panel results-panel"
+              aria-labelledby="results-title"
+            >
+              <div class="panel-heading">
+                <div>
+                  <h2 id="results-title">
+                    <span id="results-name">Nearby access points</span>
+                    <span id="result-count" class="count-badge">0</span>
+                  </h2>
+                  <p id="scope-caption">
+                    All scanners · one observation per Pi
+                  </p>
+                </div>
+                <span class="panel-label">LIVE VIEW</span>
+              </div>
+              <div class="filters">
+                <div class="search-field">
+                  <svg class="icon"><use href="#i-search" /></svg
+                  ><input
+                    id="search"
+                    type="search"
+                    placeholder="Search name, address or Pi…"
+                    aria-label="Search observations"
+                    autocomplete="off"
+                  /><kbd aria-hidden="true">/</kbd>
+                </div>
+                <label id="band-label" class="select-field"
+                  ><span class="sr-only">Frequency band</span
+                  ><select id="band">
+                    <option value="all">All bands</option>
+                    <option value="2.4">2.4 GHz</option>
+                    <option value="5">5 GHz</option>
+                    <option value="6">6 GHz</option>
+                    <option value="unknown">Unknown band</option>
+                  </select></label
+                ><label class="select-field"
+                  ><span class="sr-only">Sort results</span
+                  ><select id="sort">
+                    <option value="signal">Strongest signal</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="node">Scanner</option>
+                    <option value="address">Address</option>
+                  </select></label
+                ><button
+                  id="sort-now"
+                  class="icon-button"
+                  type="button"
+                  aria-label="Sort results now"
+                  title="Sort now; row order stays stable between updates"
+                >
+                  <svg class="icon"><use href="#i-refresh" /></svg>
+                </button>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <caption class="sr-only">
+                    Observations from the selected scanners. Select a name to
+                    inspect its details.
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" id="name-column">NETWORK / BSSID</th>
+                      <th scope="col">SIGNAL</th>
+                      <th scope="col" id="channel-column">CHANNEL</th>
+                      <th scope="col" id="security-column">SECURITY</th>
+                      <th scope="col">SCANNER</th>
+                      <th scope="col"><span class="sr-only">Details</span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="results"></tbody>
+                </table>
+                <div id="empty-state" class="empty-state">
+                  <svg class="icon"><use href="#i-wifi" /></svg>
+                  <h3 id="empty-title">Listening for your scanners</h3>
+                  <p id="empty-description">
+                    Results appear here when a Pi sends its first scan.
+                  </p>
+                  <button
+                    id="clear-filters"
+                    class="button"
+                    type="button"
+                    hidden
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              </div>
+              <div class="table-footer">
+                <span id="results-summary" role="status"
+                  >Waiting for reports</span
+                ><span id="results-hint"
+                  >Select a row to inspect
+                  <span aria-hidden="true">↗</span></span
+                >
+              </div>
+            </section>
+            <aside class="panel details-panel" aria-labelledby="details-title">
+              <div class="panel-heading">
+                <h2 id="details-title">Observation details</h2>
+                <span class="panel-label">INSPECT</span>
+              </div>
+              <div id="details-empty" class="details-empty">
+                <span class="detail-symbol"
+                  ><svg class="icon"><use href="#i-search" /></svg
+                ></span>
+                <h3>A closer look</h3>
+                <p>
+                  Select an observation to see its signal, scanner, and reported
+                  properties.
+                </p>
+              </div>
+              <div id="details-content" hidden></div>
+            </aside>
+          </div>
+          <div class="charts-grid">
+            <section class="panel chart-panel" aria-labelledby="history-title">
+              <div class="panel-heading">
+                <div>
+                  <h2 id="history-title">Signal over time</h2>
+                  <p id="history-subtitle">
+                    Select an observation to follow its signal
+                  </p>
+                </div>
+                <span class="chart-key"
+                  ><i></i
+                  ><span id="history-key">Selected observation</span></span
+                >
+              </div>
+              <div id="history-chart" class="chart-body"></div>
+              <div class="chart-footer">
+                New scan reports only · last 60 samples in this browser session
+              </div>
+            </section>
+            <section
+              class="panel chart-panel"
+              aria-labelledby="distribution-title"
+            >
+              <div class="panel-heading">
+                <div>
+                  <h2 id="distribution-title">Channel usage</h2>
+                  <p id="distribution-subtitle">
+                    Access points by band and channel
+                  </p>
+                </div>
+                <span class="panel-label" id="distribution-label">WI-FI</span>
+              </div>
+              <div id="distribution-chart" class="chart-body"></div>
+              <div id="distribution-note" class="chart-footer">
+                Unique BSSIDs in the filtered results · access point count, not
+                airtime
+              </div>
+            </section>
+          </div>
+          <footer class="page-footer">
+            <span
+              ><span class="live-dot"></span>
+              <span id="footer-status"
+                >Automatic updates every 2 seconds</span
+              ></span
+            ><span id="radio-note"
+              >Wi-Fi shows access points, not connected clients.</span
+            >
+          </footer>
+          <noscript
+            ><p class="notice">
+              Enable JavaScript to view scanner reports.
+            </p></noscript
+          >
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

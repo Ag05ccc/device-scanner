@@ -102,14 +102,24 @@ Wi-Fi için `--radios wifi --wifi-interface wlan0` kullanılabilir. Wi-Fi tarama
 ## Küçük kod yapısı
 
 - `device_scanner/server.py`: rapor alıcısı ve bellekteki son durum.
-- `device_scanner/dashboard.html`: derleme gerektirmeyen basit arayüz.
+- `device_scanner/static/index.html`: pano sayfasının yapısı.
+- `device_scanner/static/styles.css`: görünüm, açık/koyu tema ve mobil düzen.
+- `device_scanner/static/js/`: API, filtreleme, Pi listesi, sonuçlar, ayrıntılar ve grafikler için küçük JavaScript modülleri.
 - `device_scanner/node.py`: heartbeat, tarama döngüleri ve HTTP gönderimi.
 - `device_scanner/scanners/`: dummy ve gerçek tarayıcılar.
 - `device_scanner/dev.py`: ayrı server/node süreçlerini başlatma ve kapatma.
 
 Gerçek Bluetooth/Wi-Fi sürücüleri mevcut `bakici-app` projesindeki tarayıcılardan alınmıştır; bu proje eski klasöre import veya dosya yolu ile bağlı değildir. Geliştirme ve Pi aynı node döngüsünü kullanır, yalnız tarayıcı seçimi ve sunucu adresi değişir.
 
-API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`. Arayüz iki saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama süresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz.
+API: `POST /api/reports`, `GET /api/nodes`, `GET /api/health`. Arayüz görünürken iki saniyede, arka planda on saniyede bir güncellenir. Tarama ve heartbeat aralıkları `--interval`, gerçek tarama süresi `--timeout` ile ayarlanır. Bir radyo hatası diğer radyo veya heartbeat döngüsünü durdurmaz.
+
+## Yeni analiz panosu
+
+Pano, `bakici-app` Pi seçimi/ayrıntı düzeninden ve [Acrylic Wi-Fi Analyzer](https://www.acrylicwifi.com/en/wifi-analyzer/) uygulamasının tablo, sinyal ve kanal görünümlerinden esinlenir. İngilizce arayüz; Pi seçimi, Bluetooth/Wi-Fi geçişi, ad/adres araması, Wi-Fi bant filtresi, sıralama, JSON/CSV dışa aktarma ve açık/koyu tema sunar. Bir satır seçildiğinde tüm özgün tarama özellikleri incelenebilir.
+
+Sinyal grafiği yalnız tarayıcı açıkken gelen yeni raporlardan oluşur; son 60 ölçümü tutar. Kanal grafiği filtrelenen güncel başarılı sonuçlarda aynı BSSID'yi kanal/bant başına bir kez sayar; kanal doluluk oranı veya parazit ölçmez. Tablo her Pi'nin gözlemini ayrı tutar. Hatalı/çevrimdışı Pi'lerin önceki verileri işaretlenir; sunucu kesilirse son görünüm eski olarak gösterilir.
+
+HTML/CSS/JavaScript doğrudan Python sunucusundan sunulur. Uygulamayı çalıştırmak için Node.js, npm kurulumu veya derleme gerekmez. Kodun iş bölümü ve kullanım ayrıntıları: [Frontend guide](docs/frontend.md).
 
 Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üzerinde kimlik doğrulama yoktur. Sonuçlar bellektedir. DHCP, kalıcı kayıt, bina haritası ve otomatik servis kurulumu bu ilk adımın kapsamına dahil değildir.
 
@@ -120,3 +130,12 @@ Bu başlangıç sürümü geliştirme ve güvenilen yerel ağ içindir; HTTP üz
 ```
 
 Testler radyo donanımı gerektirmez. Gerçek HTTP ve ayrı süreçlerle üç dummy node, bağlantı kesilmesi/toparlanma ve temiz kapanış da kontrol edilir.
+
+İsteğe bağlı frontend kontrolleri (Node.js 20+; npm paketi gerekmez):
+
+```bash
+node --test tests/frontend/*.test.js
+node tools/check_browser.mjs
+```
+
+Tarayıcı kontrolü kurulu Chrome kullanır; gerekirse `CHROME_BIN=/path/to/chromium` ve `PYTHON=/path/to/python` belirt. Geçici sunucular ve sentetik raporlar oluşturur, test sonunda kapatır. Masaüstü, koyu tema ve mobil ekran görüntülerini `/tmp/device-scanner-{desktop,dark,mobile}.png` konumuna kaydeder.

@@ -19,6 +19,12 @@ from urllib.parse import urlsplit
 MAX_BODY_BYTES = 1024 * 1024
 NODE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 RADIOS = ("bluetooth", "wifi")
+STATIC_DIR = Path(__file__).with_name("static")
+# An explicit allowlist keeps application files outside the public web root.
+STATIC_FILES = {"/": ("index.html", "text/html"),
+                "/static/styles.css": ("styles.css", "text/css")}
+for module in ("app", "api", "observations", "ui", "nodes", "results", "details", "charts", "export"):
+    STATIC_FILES[f"/static/js/{module}.js"] = (f"js/{module}.js", "text/javascript")
 
 
 def _utc_now() -> str:
@@ -101,7 +107,8 @@ class ScannerServer(ThreadingHTTPServer):
         self.clock = clock
         self.nodes: dict[str, dict[str, Any]] = {}
         self.lock = threading.Lock()
-        self.dashboard = Path(__file__).with_name("dashboard.html").read_bytes()
+        self.assets = {url: (STATIC_DIR.joinpath(filename).read_bytes(), content_type)
+                       for url, (filename, content_type) in STATIC_FILES.items()}
         super().__init__((host, port), _Handler)
 
     def accept_report(self, report: dict[str, Any]) -> None:
@@ -159,8 +166,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
-        if path == "/":
-            self._send(200, self.server.dashboard, "text/html")
+        if path in self.server.assets:
+            body, content_type = self.server.assets[path]
+            self._send(200, body, content_type)
         elif path == "/api/health":
             self._send(200, {"status": "ok"})
         elif path == "/api/nodes":

@@ -1,0 +1,9 @@
+{
+  "name": "device-scanner-dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/frontend/*.test.js",
+    "test:browser": "node tools/check_browser.mjs"
+  }
+}
