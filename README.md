@@ -13,7 +13,8 @@ Python 3.11+ gerekir. Server ve dummy node'lar yalnız Python standart kütüpha
 ## Hemen başlat
 
 ```bash
-cd /home/gz/device-scanner
+git clone https://github.com/Ag05ccc/device-scanner.git
+cd device-scanner
 python3 -m venv .venv
 .venv/bin/python -m device_scanner dev
 ```
